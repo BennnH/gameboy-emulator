@@ -8,6 +8,7 @@ add_executable(gameboy
     src/main.cpp
     src/gb.cpp
     src/cpu.cpp
+    src/bus.cpp
 )
 
 target_include_directories(gameboy PRIVATE src)
