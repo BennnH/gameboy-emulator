@@ -10,6 +10,12 @@ class CPU {
         void step();
 
     private:
+        // Flag bit masks (more explainable than magic nums in code)
+        static constexpr uint8_t FLAG_Z = 0x80;
+        static constexpr uint8_t FLAG_N = 0x40;
+        static constexpr uint8_t FLAG_H = 0x20;
+        static constexpr uint8_t FLAG_C = 0x10;
+
         // Registers
         uint8_t a_{};
         uint8_t b_{};
@@ -61,6 +67,8 @@ class CPU {
             h_ = value >> 8;
             l_ = value & 0xFF;
         }
+
+        void add(uint8_t value);
 
         Bus& bus_;
 

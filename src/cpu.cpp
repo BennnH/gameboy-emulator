@@ -5,6 +5,25 @@ CPU::CPU(Bus& bus) : bus_(bus) {
 
 }
 
+void CPU::add(uint8_t value) {
+    // We only add and store values to register A (accumulator) and need to update flag register
+    uint16_t result = a_ + value;
+    uint8_t truncated = result & 0xFF;
+    f_ = 0;
+
+    if (truncated == 0) {
+        f_ |= FLAG_Z;
+    }
+    if ((a_ & 0x0F) + (value & 0x0F) > 0x0F) {
+        f_ |= FLAG_H;
+    }
+    if (result > 0xFF) {
+        f_ |= FLAG_C;
+    }
+
+    a_ = truncated;
+}
+
 void CPU::step() {
     uint8_t opcode = bus_.read8(pc_);
     pc_++;
@@ -13,7 +32,7 @@ void CPU::step() {
         case 0x00:
             break;
 
-        // ld opcodes, sorting by families for now as it will get confusing
+        // -------------- Load Operations --------------
 
         // LD B,B
         case 0x40:
@@ -269,6 +288,41 @@ void CPU::step() {
         // LD A,A
         case 0x7F:
             a_ = a_;
+            break;
+
+        // -------------- Arithmetic Operations --------------
+
+        // ADD A,B
+        case 0x80:
+            add(b_);
+            break;
+        // ADD A,C
+        case 0x81:
+            add(c_);
+            break;
+        // ADD A,D
+        case 0x82:
+            add(d_);
+            break;
+        // ADD A,E
+        case 0x83:
+            add(e_);
+            break;
+        // ADD A,H
+        case 0x84:
+            add(h_);
+            break;
+        // ADD A,L
+        case 0x85:
+            add(l_);
+            break;
+        // ADD A,(HL)
+        case 0x86:
+            add(bus_.read8(get_hl()));
+            break;
+        // ADD A,A
+        case 0x87:
+            add(a_);
             break;
 
 
