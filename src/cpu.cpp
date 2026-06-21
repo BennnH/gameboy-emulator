@@ -24,6 +24,62 @@ void CPU::add(uint8_t value) {
     a_ = truncated;
 }
 
+void CPU::adc(uint8_t value) {
+    uint8_t carry = (f_ & FLAG_C) >> 4;
+    uint16_t result = a_ + value + carry;
+    uint8_t truncated = result & 0xFF;
+
+    f_ = 0;
+    if (truncated == 0) {
+        f_ |= FLAG_Z;
+    }
+    if ((a_ & 0x0F) + (value & 0x0F) + carry > 0x0F) {
+        f_ |= FLAG_H;
+    }
+    if (result > 0xFF) {
+        f_ |= FLAG_C;
+    }
+
+    a_ = truncated;
+}
+
+void CPU::sub(uint8_t value) {
+    uint8_t result = a_ - value;
+
+    f_ = 0;
+    f_ |= FLAG_N;
+    if (result == 0) {
+        f_ |= FLAG_Z;
+    }
+    if (value > a_) {
+        f_ |= FLAG_C;
+    }
+    if ((value & 0x0F) > (a_ & 0x0F)) {
+        f_ |= FLAG_H;
+    }
+
+    a_ = result;
+}
+
+void CPU::sbc(uint8_t value) {
+    uint8_t carry = (f_ & FLAG_C) >> 4;
+    int result = a_ - value - carry;
+
+    f_ = 0;
+    f_ |= FLAG_N;
+    if ((result & 0xFF) == 0) {
+        f_ |= FLAG_Z;
+    }
+    if ((value & 0x0F) + carry > (a_ & 0x0F)) {
+        f_ |= FLAG_H;
+    }
+    if (result < 0) {
+        f_ |= FLAG_C;
+    }
+
+    a_= result & 0xFF;
+}
+
 void CPU::step() {
     uint8_t opcode = bus_.read8(pc_);
     pc_++;
@@ -324,7 +380,102 @@ void CPU::step() {
         case 0x87:
             add(a_);
             break;
-
+        // ADC A,B
+        case 0x88:
+            adc(b_);
+            break;
+        // ADC A,C
+        case 0x89:
+            adc(c_);
+            break;
+        // ADC A,D
+        case 0x8A:
+            adc(d_);
+            break;
+        // ADC A,E
+        case 0x8B:
+            adc(e_);
+            break;
+        // ADC A,H
+        case 0x8C:
+            adc(h_);
+            break;
+        // ADC A,L
+        case 0x8D:
+            adc(l_);
+            break;
+        // ADC A,(HL)
+        case 0x8E:
+            adc(bus_.read8(get_hl()));
+            break;
+        // ADC A,A
+        case 0x8F:
+            adc(a_);
+            break;
+        // SUB A,B
+        case 0x90:
+            sub(b_);
+            break;
+        // SUB A,C
+        case 0x91:
+            sub(c_);
+            break;
+        // SUB A,D
+        case 0x92:
+            sub(d_);
+            break;
+        // SUB A,E
+        case 0x93:
+            sub(e_);
+            break;
+        // SUB A,H
+        case 0x94:
+            sub(h_);
+            break;
+        // SUB A,L
+        case 0x95:
+            sub(l_);
+            break;
+        // SUB A,(HL)
+        case 0x96:
+            sub(bus_.read8(get_hl()));
+            break;
+        // SUB A,A
+        case 0x97:
+            sub(a_);
+            break;
+        // SBC A,B
+        case 0x98:
+            sbc(b_);
+            break;
+        // SBC A,C
+        case 0x99:
+            sbc(c_);
+            break;
+        // SBC A,D
+        case 0x9A:
+            sbc(d_);
+            break;
+        // SBC A,E
+        case 0x9B:
+            sbc(e_);
+            break;
+        // SBC A,H
+        case 0x9C:
+            sbc(h_);
+            break;
+        // SBC A,L
+        case 0x9D:
+            sbc(l_);
+            break;
+        // SBC A,(HL)
+        case 0x9E:
+            sbc(bus_.read8(get_hl()));
+            break;
+        // SBC A,A
+        case 0x9F:
+            sbc(a_);
+            break;
 
 
         default:

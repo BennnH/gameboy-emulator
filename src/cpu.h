@@ -69,6 +69,9 @@ class CPU {
         }
 
         void add(uint8_t value);
+        void adc(uint8_t value);
+        void sub(uint8_t value);
+        void sbc(uint8_t value);
 
         Bus& bus_;
 
