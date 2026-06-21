@@ -72,6 +72,10 @@ class CPU {
         void adc(uint8_t value);
         void sub(uint8_t value);
         void sbc(uint8_t value);
+        void and_(uint8_t value);
+        void xor_(uint8_t value);
+        void or_(uint8_t value);
+        void cp(uint8_t value);
 
         Bus& bus_;
 

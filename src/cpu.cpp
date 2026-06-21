@@ -80,6 +80,47 @@ void CPU::sbc(uint8_t value) {
     a_= result & 0xFF;
 }
 
+void CPU::and_(uint8_t value) {
+    a_ &= value;
+    f_ = 0;
+    if (a_ == 0) {
+        f_ |= FLAG_Z;
+    }
+    f_ |= FLAG_H;
+}
+
+void CPU::xor_(uint8_t value) {
+    a_ ^= value;
+    f_ = 0;
+    if (a_ == 0) {
+        f_ |= FLAG_Z;
+    }
+}
+
+void CPU::or_(uint8_t value) {
+    a_ |= value;
+    f_= 0;
+    if (a_ == 0) {
+        f_ |= FLAG_Z;
+    }
+}
+
+void CPU::cp(uint8_t value) {
+    uint8_t result = a_ - value;
+
+    f_ = 0;
+    f_ |= FLAG_N;
+    if (result == 0) {
+        f_ |= FLAG_Z;
+    }
+    if (value > a_) {
+        f_ |= FLAG_C;
+    }
+    if ((value & 0x0F) > (a_ & 0x0F)) {
+        f_ |= FLAG_H;
+    }
+}
+
 void CPU::step() {
     uint8_t opcode = bus_.read8(pc_);
     pc_++;
@@ -304,7 +345,7 @@ void CPU::step() {
             break;
         // LD (HL),L
         case 0x75:
-            bus_.write8(get_hl(), h_);
+            bus_.write8(get_hl(), l_);
             break;
         // HALT: Need to come back to this once interrupts are implemented
         case 0x76:
@@ -476,6 +517,138 @@ void CPU::step() {
         case 0x9F:
             sbc(a_);
             break;
+
+        // -------------- Logical Operations --------------
+
+        // AND A,B
+        case 0xA0:
+            and_(b_);
+            break;
+        // AND A,C
+        case 0xA1:
+            and_(c_);
+            break;
+        // AND A,D
+        case 0xA2:
+            and_(d_);
+            break;
+        // AND A,E
+        case 0xA3:
+            and_(e_);
+            break;
+        // AND A,H
+        case 0xA4:
+            and_(h_);
+            break;
+        // AND A,L
+        case 0xA5:
+            and_(l_);
+            break;
+        // AND A,(HL)
+        case 0xA6:
+            and_(bus_.read8(get_hl()));
+            break;
+        // AND A,A
+        case 0xA7:
+            and_(a_);
+            break;
+        // XOR A,B
+        case 0xA8:
+            xor_(b_);
+            break;
+        // XOR A,C
+        case 0xA9:
+            xor_(c_);
+            break;
+        // XOR A,D
+        case 0xAA:
+            xor_(d_);
+            break;
+        // XOR A,E
+        case 0xAB:
+            xor_(e_);
+            break;
+        // XOR A,H
+        case 0xAC:
+            xor_(h_);
+            break;
+        // XOR A,L
+        case 0xAD:
+            xor_(l_);
+            break;
+        // XOR A,(Hl)
+        case 0xAE:
+            xor_(bus_.read8(get_hl()));
+            break;
+        // XOR A,A
+        case 0xAF:
+            xor_(a_);
+            break;
+        // OR A,B
+        case 0xB0:
+            or_(b_);
+            break;
+        // OR A,C
+        case 0xB1:
+            or_(c_);
+            break;
+        // OR A,D
+        case 0xB2:
+            or_(d_);
+            break;
+        // OR A,E
+        case 0xB3:
+            or_(e_);
+            break;
+        // OR A,H
+        case 0xB4:
+            or_(h_);
+            break;
+        // OR A,L
+        case 0xB5:
+            or_(l_);
+            break;
+        // OR A,(HL)
+        case 0xB6:
+            or_(bus_.read8(get_hl()));
+            break;
+        // OR A,A
+        case 0xB7:
+            or_(a_);
+            break;
+        // CP A,B
+        case 0xB8:
+            cp(b_);
+            break;
+        // CP A,C
+        case 0xB9:
+            cp(c_);
+            break;
+        // CP A,D
+        case 0xBA:
+            cp(d_);
+            break;
+        // CP A,E
+        case 0xBB:
+            cp(e_);
+            break;
+        // CP A,H
+        case 0xBC:
+            cp(h_);
+            break;
+        // CP A,L
+        case 0xBD:
+            cp(l_);
+            break;
+        // CP A,(HL)
+        case 0xBE:
+            cp(bus_.read8(get_hl()));
+            break;
+        // CP A,A
+        case 0xBF:
+            cp(a_);
+            break;
+
 
 
         default:
