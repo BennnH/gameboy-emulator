@@ -121,13 +121,83 @@ void CPU::cp(uint8_t value) {
     }
 }
 
+void CPU::inc(uint8_t& reg) {
+    uint8_t result = reg + 1;
+
+    // Want to reset everything but the carry flag.
+    f_ &= FLAG_C;
+
+    if (result == 0) {
+        f_ |= FLAG_Z;
+    }
+    if ((reg & 0x0F) == 0x0F) {
+        f_ |= FLAG_H;
+    }
+    reg = result;
+}
+
 void CPU::step() {
     uint8_t opcode = bus_.read8(pc_);
     pc_++;
 
     switch (opcode) {
+        // NOP
         case 0x00:
             break;
+        //LD BC,u16
+        case 0x01: {
+            uint8_t low = bus_.read8(pc_);
+            pc_++;
+            uint8_t high = bus_.read8(pc_);
+            pc_++;
+            uint16_t value = (high << 8) | low;
+            set_bc(value);
+            break;
+        }
+        // LD (BC),A
+        case 0x02:
+            bus_.write8(get_bc(), a_);
+            break;
+        // INC BC
+        case 0x03:
+            set_bc(get_bc() + 1);
+            break;
+        // INC B
+        case 0x04:
+            inc(b_);
+            break;
+        // INC C
+        case 0x0C:
+            inc(c_);
+            break;
+        // INC D
+        case 0x14:
+            inc(d_);
+            break;
+        // INC E
+        case 0x1C:
+            inc(e_);
+            break;
+        // INC H
+        case 0x24:
+            inc(h_);
+            break;
+        // INC L
+        case 0x2C:
+            inc(l_);
+            break;
+        // INC (HL)
+        case 0x34: {
+            uint8_t value = bus_.read8(get_hl());
+            inc(value);
+            bus_.write8(get_hl(), value);
+            break;
+        }
+        // INC A
+        case 0x3C:
+            inc(a_);
+            break;
+
 
         // -------------- Load Operations --------------
 

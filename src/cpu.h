@@ -76,6 +76,7 @@ class CPU {
         void xor_(uint8_t value);
         void or_(uint8_t value);
         void cp(uint8_t value);
+        void inc(uint8_t& reg);
 
         Bus& bus_;
 
