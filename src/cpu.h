@@ -77,6 +77,8 @@ class CPU {
         void or_(uint8_t value);
         void cp(uint8_t value);
         void inc(uint8_t& reg);
+        void dec(uint8_t& reg);
+        uint16_t read_u16();
 
         Bus& bus_;
 

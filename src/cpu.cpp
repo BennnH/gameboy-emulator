@@ -136,6 +136,28 @@ void CPU::inc(uint8_t& reg) {
     reg = result;
 }
 
+void CPU::dec(uint8_t& reg) {
+    uint8_t result = reg - 1;
+
+    // Want to reset everything but the carry flag.
+    f_ &= FLAG_C;
+    f_ |= FLAG_N;
+    if (result == 0) {
+        f_ |= FLAG_Z;
+    }
+    if ((result & 0x0F) == 0x00) {
+        f_ |= FLAG_H;
+    }
+}
+
+uint16_t CPU::read_u16() {
+    uint8_t low = bus_.read8(pc_);
+    pc_++;
+    uint8_t high = bus_.read8(pc_);
+    pc_++;
+    return (high << 8) | low;
+}
+
 void CPU::step() {
     uint8_t opcode = bus_.read8(pc_);
     pc_++;
@@ -145,15 +167,9 @@ void CPU::step() {
         case 0x00:
             break;
         //LD BC,u16
-        case 0x01: {
-            uint8_t low = bus_.read8(pc_);
-            pc_++;
-            uint8_t high = bus_.read8(pc_);
-            pc_++;
-            uint16_t value = (high << 8) | low;
-            set_bc(value);
+        case 0x01:
+            set_bc(read_u16());
             break;
-        }
         // LD (BC),A
         case 0x02:
             bus_.write8(get_bc(), a_);
@@ -166,25 +182,126 @@ void CPU::step() {
         case 0x04:
             inc(b_);
             break;
+        // DEC B
+        case 0x05:
+            dec(b_);
+            break;
+        // LD B,u8
+        case 0x06:
+            b_ = bus_.read8(pc_);
+            pc_++;
+            break;
+        // LD A,(BC)
+        case 0x0A:
+            a_ = bus_.read8(get_bc());
+            break;
+        // DEC BC
+        case 0x0B:
+            set_bc(get_bc() - 1);
+            break;
         // INC C
         case 0x0C:
             inc(c_);
+            break;
+        // DEC C
+        case 0x0D:
+            dec(c_);
+            break;
+        // LD C,u8
+        case 0x0E:
+            c_ = bus_.read8(pc_);
+            pc_++;
+            break;
+        // LD (DE),u16
+        case 0x11:
+            set_de(read_u16());
+            break;
+        // LD (DE),A
+        case 0x12:
+            bus_.write8(get_de(), a_);
+            break;
+        // INC DE
+        case 0x13:
+            set_de(get_de() + 1);
             break;
         // INC D
         case 0x14:
             inc(d_);
             break;
+        // DEC D
+        case 0x15:
+            dec(d_);
+            break;
+        // LD D,u8
+        case 0x16:
+            d_ = bus_.read8(pc_);
+            pc_++;
+            break;
+        // LD A,(DE)
+        case 0x1A:
+            a_ = bus_.read8(get_de());
+        // DEC DE
+        case 0x1B:
+            set_de(get_de() - 1);
+            break;
         // INC E
         case 0x1C:
             inc(e_);
+            break;
+        // DEC E
+        case 0x1D:
+            dec(e_);
+            break;
+        // LD E,u8
+        case 0x1E:
+            e_ = bus_.read8(pc_);
+            pc_++;
+            break;
+        // LD HL,u16
+        case 0x21:
+            set_hl(read_u16());
+            break;
+        // INC HL
+        case 0x23:
+            set_hl(get_hl() + 1);
             break;
         // INC H
         case 0x24:
             inc(h_);
             break;
+        // DEC H
+        case 0x25:
+            dec(h_);
+            break;
+        // LD H,u8
+        case 0x26:
+            h_ = bus_.read8(pc_);
+            pc_++;
+            break;
+        // DEC HL
+        case 0x2B:
+            set_hl(get_hl() - 1);
+            break;
         // INC L
         case 0x2C:
             inc(l_);
+            break;
+        // DEC L
+        case 0x2D:
+            dec(l_);
+            break;
+        // LD L,u8
+        case 0x2E:
+            l_ = bus_.read8(pc_);
+            pc_++;
+            break;
+        // LD SP,u16
+        case 0x31:
+            sp_ = read_u16();
+            break;
+        // INC SP
+        case 0x33:
+            sp_ += 1;
             break;
         // INC (HL)
         case 0x34: {
@@ -193,9 +310,36 @@ void CPU::step() {
             bus_.write8(get_hl(), value);
             break;
         }
+        // DEC (HL)
+        case 0x35: {
+            uint8_t value = bus_.read8(get_hl());
+            dec(value);
+            bus_.write8(get_hl(), value);
+            break;
+        }
+        // LD (HL),u8
+        case 0x36: {
+            uint8_t value = bus_.read8(pc_);
+            pc_++;
+            bus_.write8(get_hl(), value);
+            break;
+        }
+        // DEC SP
+        case 0x3B:
+            sp_ -= 1;
+            break;
         // INC A
         case 0x3C:
             inc(a_);
+            break;
+        // DEC A
+        case 0x3D:
+            dec(a_);
+            break;
+        // LD A,u8
+        case 0x3E:
+            a_ = bus_.read8(pc_);
+            pc_++;
             break;
 
 
