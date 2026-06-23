@@ -1,5 +1,6 @@
 #include "cpu.h"
 #include "bus.h"
+#include <sys/types.h>
 
 CPU::CPU(Bus& bus) : bus_(bus) {
 
@@ -150,6 +151,20 @@ void CPU::dec(uint8_t& reg) {
     }
 }
 
+void CPU::add_hl(uint16_t value) {
+    uint32_t result = get_hl() + value;
+
+    // Preserve Zero flag
+    f_ &= FLAG_Z;
+    if ((get_hl() & 0x0FFF) + (value &  0x0FFF) > 0x0FFF) {
+        f_ |= FLAG_H;
+    }
+    if (result > 0xFFFF) {
+        f_ |= FLAG_C;
+    }
+    set_hl(result & 0xFFFF);
+}
+
 uint16_t CPU::read_u16() {
     uint8_t low = bus_.read8(pc_);
     pc_++;
@@ -191,6 +206,19 @@ void CPU::step() {
             b_ = bus_.read8(pc_);
             pc_++;
             break;
+        // RLCA - Rotate Left Circular A
+        case 0x07: {
+            uint8_t top_bit = (a_  >> 7) & 1;
+            a_ = (a_ << 1) | top_bit;
+            // Set all regs to 0, if top bit fell off then turn carry on.
+            f_ = 0;
+            if (top_bit) f_ |= FLAG_C;
+            break;
+        }
+        // ADD HL,BC
+        case 0x09:
+            add_hl(get_bc());
+            break;
         // LD A,(BC)
         case 0x0A:
             a_ = bus_.read8(get_bc());
@@ -210,6 +238,18 @@ void CPU::step() {
         // LD C,u8
         case 0x0E:
             c_ = bus_.read8(pc_);
+            pc_++;
+            break;
+        // RRCA - Rotate Right Circular A
+        case 0x0F: {
+            uint8_t bottom_bit = a_ & 1;
+            a_ = (a_ >> 1) |(bottom_bit << 7);
+            f_ = 0;
+            if (bottom_bit) f_ |= FLAG_C;
+            break;
+        }
+        // STOP - COME BACK TO THIS
+        case 0x10:
             pc_++;
             break;
         // LD (DE),u16
@@ -237,9 +277,23 @@ void CPU::step() {
             d_ = bus_.read8(pc_);
             pc_++;
             break;
+        // RLA - Rotate Left through carry A
+        case 0x17: {
+            uint8_t old_carry = (f_ & FLAG_C) ? 1 : 0;
+            uint8_t top_bit = (a_ >> 7) & 1;
+            a_ = (a_ << 1) | old_carry;
+            f_ = 0;
+            if (top_bit) f_ |= FLAG_C;
+            break;
+        }
+        // ADD HL,DE
+        case 0x19:
+            add_hl(get_de());
+            break;
         // LD A,(DE)
         case 0x1A:
             a_ = bus_.read8(get_de());
+            break;
         // DEC DE
         case 0x1B:
             set_de(get_de() - 1);
@@ -257,9 +311,23 @@ void CPU::step() {
             e_ = bus_.read8(pc_);
             pc_++;
             break;
+        // RRA - Rotate Right through carry A
+        case 0x1F: {
+            uint8_t old_carry = (f_ & FLAG_C) ? 1 : 0;
+            uint8_t bottom_bit = a_ & 1;
+            a_ = (a_ >> 1) | (old_carry << 7);
+            f_ = 0;
+            if (bottom_bit) f_ |= FLAG_C;
+            break;
+        }
         // LD HL,u16
         case 0x21:
             set_hl(read_u16());
+            break;
+        // LD (HL+),A
+        case 0x22:
+            bus_.write8(get_hl(), a_);
+            set_hl(get_hl() + 1);
             break;
         // INC HL
         case 0x23:
@@ -278,6 +346,49 @@ void CPU::step() {
             h_ = bus_.read8(pc_);
             pc_++;
             break;
+        // DDA - Decimal Adjust Accumulator (NO idea).
+        case 0x27: {
+            uint8_t adjust = 0;
+            bool set_carry = false;
+
+            // If last op was NOT a subtraction, adjust upward where digits overflowed
+            if (!(f_ & FLAG_N)) {
+                if ((f_ & FLAG_H) || (a_ & 0x0F) > 0x09) {
+                    adjust |= 0x06;
+                }
+                if ((f_ & FLAG_C) || a_ > 0x99) {
+                    adjust |= 0x60;
+                    set_carry = true;
+                }
+                a_ += adjust;
+            } else {
+                // Last op was a subtraction: adjust downward
+                if (f_ & FLAG_H) {
+                    adjust |= 0x06;
+                }
+                if (f_ & FLAG_C) {
+                    adjust |= 0x60;
+                    set_carry = true;
+                }
+                a_ -= adjust;
+            }
+
+            // Flags: N preserved, H always cleared, Z if result 0, C if high correction applied
+            f_ &= FLAG_N;
+            if (a_ == 0)   f_ |= FLAG_Z;
+            if (set_carry) f_ |= FLAG_C;
+            break;
+        }
+
+        // ADD HL,HL
+        case 0x29:
+            add_hl(get_hl());
+            break;
+        // LD A,(HL+)
+        case 0x2A:
+            a_ = bus_.read8(get_hl());
+            set_hl(get_hl() + 1);
+            break;
         // DEC HL
         case 0x2B:
             set_hl(get_hl() - 1);
@@ -295,9 +406,19 @@ void CPU::step() {
             l_ = bus_.read8(pc_);
             pc_++;
             break;
+        // CPL - ComPLement register A
+        case 0x2F:
+            a_ = ~a_;
+            f_ |= FLAG_N | FLAG_H;
+            break;
         // LD SP,u16
         case 0x31:
             sp_ = read_u16();
+            break;
+        // LD (HL-),A
+        case 0x32:
+            bus_.write8(get_hl(), a_);
+            set_hl(get_hl() - 1);
             break;
         // INC SP
         case 0x33:
@@ -324,6 +445,20 @@ void CPU::step() {
             bus_.write8(get_hl(), value);
             break;
         }
+        // SCF - Set Carry Flag
+        case 0x37:
+            f_ &= FLAG_Z;
+            f_ |= FLAG_C;
+            break;
+        // ADD HL,SP
+        case 0x39:
+            add_hl(sp_);
+            break;
+        // LD A,(HL-)
+        case 0x3A:
+            a_ = bus_.read8(get_hl());
+            set_hl(get_hl() - 1);
+            break;
         // DEC SP
         case 0x3B:
             sp_ -= 1;
@@ -340,6 +475,11 @@ void CPU::step() {
         case 0x3E:
             a_ = bus_.read8(pc_);
             pc_++;
+            break;
+        // CCF - Complement Carry Flag
+        case 0x3F:
+            f_ &= (FLAG_Z | FLAG_C);
+            f_ ^= FLAG_C;
             break;
 
 
