@@ -1,4 +1,7 @@
 #include "cartridges/cartridge.h"
+#include "bus.h"
+#include "cpu.h"
+
 #include <iostream>
 
 int main(int argc, char* argv[]) {
@@ -13,6 +16,9 @@ int main(int argc, char* argv[]) {
     std::cout << "Cartridge type: " << static_cast<int>(cart.cartridge_type()) << "\n";
     std::cout << "ROM size code: "  << static_cast<int>(cart.rom_size_code()) << "\n";
     std::cout << "RAM size code: "  << static_cast<int>(cart.ram_size_code()) << "\n";
+
+    Bus bus(cart);
+    CPU cpu(bus);
 
     return 0;
 }
