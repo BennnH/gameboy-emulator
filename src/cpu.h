@@ -78,6 +78,7 @@ class CPU {
         void cp(uint8_t value);
         void inc(uint8_t& reg);
         void dec(uint8_t& reg);
+        void jr_conditional(bool condition);
         void add_hl(uint16_t value);
         uint16_t read_u16();
 

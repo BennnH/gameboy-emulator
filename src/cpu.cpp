@@ -1,6 +1,5 @@
 #include "cpu.h"
 #include "bus.h"
-#include <sys/types.h>
 
 CPU::CPU(Bus& bus) : bus_(bus) {
 
@@ -146,8 +145,19 @@ void CPU::dec(uint8_t& reg) {
     if (result == 0) {
         f_ |= FLAG_Z;
     }
-    if ((result & 0x0F) == 0x00) {
+    if ((reg & 0x0F) == 0x00) {
         f_ |= FLAG_H;
+    }
+    reg = result;
+}
+
+void CPU::jr_conditional(bool condition) {
+    // Have to cast to signed int so we can have -128 -> +127 range of relative jumps.
+    // Relative so we add the value to the pc instead of just setting pc to an address.
+    int8_t offset = static_cast<int8_t>(bus_.read8(pc_));
+    pc_++;
+    if (condition) {
+        pc_ += offset;
     }
 }
 
@@ -215,6 +225,14 @@ void CPU::step() {
             if (top_bit) f_ |= FLAG_C;
             break;
         }
+        // LD (u16),SP
+        case 0x08: {
+            uint16_t address = read_u16();
+            bus_.write8(address, sp_ & 0xFF);
+            bus_.write8(address + 1, sp_ >>  8);
+            break;
+        }
+
         // ADD HL,BC
         case 0x09:
             add_hl(get_bc());
@@ -286,6 +304,10 @@ void CPU::step() {
             if (top_bit) f_ |= FLAG_C;
             break;
         }
+        // JR i8
+        case 0x18:
+            jr_conditional(true);
+            break;
         // ADD HL,DE
         case 0x19:
             add_hl(get_de());
@@ -320,6 +342,10 @@ void CPU::step() {
             if (bottom_bit) f_ |= FLAG_C;
             break;
         }
+        // JR NZ,i8
+        case 0x20:
+            jr_conditional(!(f_ & FLAG_Z));
+            break;
         // LD HL,u16
         case 0x21:
             set_hl(read_u16());
@@ -346,7 +372,7 @@ void CPU::step() {
             h_ = bus_.read8(pc_);
             pc_++;
             break;
-        // DDA - Decimal Adjust Accumulator (NO idea).
+        // DAA - Decimal Adjust Accumulator (NO idea).
         case 0x27: {
             uint8_t adjust = 0;
             bool set_carry = false;
@@ -379,6 +405,10 @@ void CPU::step() {
             if (set_carry) f_ |= FLAG_C;
             break;
         }
+        //JR Z,i8
+        case 0x28:
+            jr_conditional(f_ & FLAG_Z);
+            break;
 
         // ADD HL,HL
         case 0x29:
@@ -410,6 +440,10 @@ void CPU::step() {
         case 0x2F:
             a_ = ~a_;
             f_ |= FLAG_N | FLAG_H;
+            break;
+        // JR NC,i8
+        case 0x30:
+            jr_conditional(!(f_ & FLAG_C));
             break;
         // LD SP,u16
         case 0x31:
@@ -449,6 +483,10 @@ void CPU::step() {
         case 0x37:
             f_ &= FLAG_Z;
             f_ |= FLAG_C;
+            break;
+        // JR C,i8
+        case 0x38:
+            jr_conditional(f_ & FLAG_C);
             break;
         // ADD HL,SP
         case 0x39:
