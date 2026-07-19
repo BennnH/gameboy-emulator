@@ -1,5 +1,6 @@
 #include "cpu.h"
 #include "bus.h"
+#include <cstdint>
 
 CPU::CPU(Bus& bus) : bus_(bus) {
 
@@ -173,6 +174,67 @@ void CPU::add_hl(uint16_t value) {
         f_ |= FLAG_C;
     }
     set_hl(result & 0xFFFF);
+}
+
+void CPU::push16(uint16_t value) {
+    // Stack grows downward. High byte goes at the higher address,
+    // so it gets pushed first, leaving the low byte at the lower address.
+    sp_--;
+    bus_.write8(sp_, value >> 8);
+    sp_--;
+    bus_.write8(sp_, value & 0xFF);
+}
+
+uint16_t CPU::pop16() {
+    uint8_t low = bus_.read8(sp_);
+    sp_++;
+    uint8_t high = bus_.read8(sp_);
+    sp_++;
+    return (high << 8) | low;
+}
+
+void CPU::jp_conditional(bool condition) {
+    uint16_t address = read_u16();
+    if (condition) {
+        pc_ = address;
+    }
+}
+
+void CPU::call_conditional(bool condition) {
+    uint16_t address = read_u16();
+    if (condition) {
+        push16(pc_);
+        pc_ = address;
+    }
+}
+
+void CPU::ret_conditional(bool condition) {
+    if (condition) {
+        pc_ = pop16();
+    }
+}
+
+void CPU::rst(uint16_t vector) {
+    push16(pc_);
+    pc_ = vector;
+}
+
+uint16_t CPU::add_sp_i8() {
+    uint8_t raw = bus_.read8(pc_);
+    pc_++;
+    int8_t offset = static_cast<int8_t>(raw);
+
+    // Z and N are always cleared here, even though this is an addition.
+    // H and C come from UNSIGNED low-byte arithmetic, not the signed result.
+    f_ = 0;
+    if ((sp_ & 0x0F) + (raw & 0x0F) > 0x0F) {
+        f_ |= FLAG_H;
+    }
+    if ((sp_ & 0xFF) + raw > 0xFF) {
+        f_ |= FLAG_C;
+    }
+
+    return sp_ + offset;
 }
 
 uint16_t CPU::read_u16() {
@@ -1040,11 +1102,264 @@ void CPU::step() {
         case 0xBF:
             cp(a_);
             break;
-
-
+        // RET NZ
+        case 0xC0:
+            ret_conditional(!(f_ & FLAG_Z));
+            break;
+        // POP BC
+        case 0xC1:
+            set_bc(pop16());
+            break;
+        // JP NZ,u16
+        case 0xC2:
+            jp_conditional(!(f_ & FLAG_Z));
+            break;
+        // JP u16
+        case 0xC3:
+            jp_conditional(true);
+            break;
+        // CALL NZ,u16
+        case 0xC4:
+            call_conditional(!(f_ & FLAG_Z));
+            break;
+        // PUSH BC
+        case 0xC5:
+            push16(get_bc());
+            break;
+        // ADD A,u8
+        case 0xC6: {
+            uint8_t value = bus_.read8(pc_);
+            pc_++;
+            add(value);
+            break;
+        }
+        // RST 00h
+        case 0xC7:
+            rst(0x00);
+            break;
+            // RET Z
+        case 0xC8:
+            ret_conditional(f_ & FLAG_Z);
+            break;
+        // RET
+        case 0xC9:
+            pc_ = pop16();
+            break;
+        // JP Z,u16
+        case 0xCA:
+            jp_conditional(f_ & FLAG_Z);
+            break;
+        // CB prefix - Execute a CB prefixed opcode
+        case 0xCB: {
+            uint8_t cb_opcode = bus_.read8(pc_);
+            pc_++;
+            execute_cb(cb_opcode);
+            break;
+        }
+        // CALL Z,u16
+        case 0xCC:
+            call_conditional(f_ & FLAG_Z);
+            break;
+        // CALL u16
+        case 0xCD:
+            call_conditional(true);
+            break;
+        // ADC A,u8
+        case 0xCE: {
+            uint8_t value = bus_.read8(pc_);
+            pc_++;
+            adc(value);
+            break;
+        }
+        case 0xCF:
+            rst(0x08);
+            break;
+        // RET NC
+        case 0xD0:
+            ret_conditional(!(f_ & FLAG_C));
+            break;
+        // POP DE
+        case 0xD1:
+            set_de(pop16());
+            break;
+        // JP NC,u16
+        case 0xD2:
+            jp_conditional(!(f_ & FLAG_C));
+            break;
+        // CALL NC,u16
+        case 0xD4:
+            call_conditional(!(f_ & FLAG_C));
+            break;
+        // PUSH DE
+        case 0xD5:
+            push16(get_de());
+            break;
+        // SUB A,u8
+        case 0xD6: {
+            uint8_t value = bus_.read8(pc_);
+            pc_++;
+            sub(value);
+            break;
+        }
+        // RST 10h
+        case 0xD7:
+            rst(0x10);
+            break;
+        // RET C
+        case 0xD8:
+            ret_conditional(f_ & FLAG_C);
+            break;
+        // RETI - return and re-enable interrupts
+        case 0xD9:
+            pc_ = pop16();
+            ime_ = true;
+            break;
+        // JP C,u16
+        case 0xDA:
+            jp_conditional(f_ & FLAG_C);
+            break;
+        // CALL C,u16
+        case 0xDC:
+            call_conditional(f_ & FLAG_C);
+            break;
+        // SBC A,u8
+        case 0xDE: {
+            uint8_t value = bus_.read8(pc_);
+            pc_++;
+            sbc(value);
+            break;
+        }
+        // RST 18h
+        case 0xDF:
+            rst(0x18);
+            break;
+        // LDH (u8),A
+        case 0xE0: {
+            uint8_t offset = bus_.read8(pc_);
+            pc_++;
+            bus_.write8(0xFF00 + offset, a_);
+            break;
+        }
+        // POP HL
+        case 0xE1:
+            set_hl(pop16());
+            break;
+        // LD (FF00+C),A
+        case 0xE2:
+            bus_.write8(0xFF00 + c_, a_);
+            break;
+        // PUSH HL
+        case 0xE5:
+            push16(get_hl());
+            break;
+        // AND A,u8
+        case 0xE6: {
+            uint8_t value = bus_.read8(pc_);
+            pc_++;
+            and_(value);
+            break;
+        }
+        // RST 20h
+        case 0xE7:
+            rst(0x20);
+            break;
+        // ADD SP,i8
+        case 0xE8:
+            sp_ = add_sp_i8();
+            break;
+        // JP HL
+        case 0xE9:
+            pc_ = get_hl();
+            break;
+            // LD (u16),A
+        case 0xEA:
+            bus_.write8(read_u16(), a_);
+            break;
+        // XOR A,u8
+        case 0xEE: {
+            uint8_t value = bus_.read8(pc_);
+            pc_++;
+            xor_(value);
+            break;
+        }
+        // RST 28h
+        case 0xEF:
+            rst(0x28);
+            break;
+        // LDH A,(u8)
+        case 0xF0: {
+            uint8_t offset = bus_.read8(pc_);
+            pc_++;
+            a_ = bus_.read8(0xFF00 + offset);
+            break;
+        }
+        // POP AF
+        case 0xF1:
+            set_af(pop16());
+            break;
+        // LD A,(FF00+C)
+        case 0xF2:
+            a_ = bus_.read8(0xFF00 + c_);
+            break;
+        // DI - disable interrupts
+        case 0xF3:
+            ime_ = false;
+            break;
+        // PUSH AF
+        case 0xF5:
+            push16(get_af());
+            break;
+        // OR A,u8
+        case 0xF6: {
+            uint8_t value = bus_.read8(pc_);
+            pc_++;
+            or_(value);
+            break;
+        }
+        // RST 30h
+        case 0xF7:
+            rst(0x30);
+            break;
+        // LD HL,SP+i8
+        case 0xF8:
+            set_hl(add_sp_i8());
+            break;
+        // LD SP,HL
+        case 0xF9:
+            sp_ = get_hl();
+            break;
+        // LD A,(u16)
+        case 0xFA:
+            a_ = bus_.read8(read_u16());
+            break;
+            // EI - enable interrupts
+        case 0xFB:
+            // Dont think this should set immediately, should be delayed by one instruction when
+            // sorting out actual instruction timings.
+            ime_ = true;
+            break;
+        // CP A,u8
+        case 0xFE: {
+            uint8_t value = bus_.read8(pc_);
+            pc_++;
+            cp(value);
+            break;
+        }
+        // RST 38h
+        case 0xFF:
+            rst(0x38);
+            break;
 
         default:
             // Unimplemented opcode, come back to this and sort it out.
+            break;
+    }
+}
+
+void CPU::execute_cb(uint8_t opcode) {
+    switch (opcode) {
+        default:
+            // CB table not implemented yet
             break;
     }
 }

@@ -29,6 +29,8 @@ class CPU {
         uint16_t sp_{};
         uint16_t pc_{};
 
+        bool ime_{};   // Interrupt Master Enable
+
         // Can access registers as higher and lower bytes of pairs, so for now just use getters and setters to
         // update individual registers
 
@@ -80,6 +82,14 @@ class CPU {
         void dec(uint8_t& reg);
         void jr_conditional(bool condition);
         void add_hl(uint16_t value);
+        void push16(uint16_t value);
+        uint16_t pop16();
+        void jp_conditional(bool condition);
+        void call_conditional(bool condition);
+        void ret_conditional(bool condition);
+        void rst(uint16_t vector);
+        uint16_t add_sp_i8();
+        void execute_cb(uint8_t opcode);
         uint16_t read_u16();
 
         Bus& bus_;
