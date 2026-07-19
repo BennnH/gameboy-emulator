@@ -7,6 +7,10 @@ class Bus;
 class CPU {
     public:
         explicit CPU(Bus& bus);
+        void reset();
+        void print_state() const;
+        // Debug only - lets tests point the CPU at hand-written code
+        void set_pc(uint16_t value) { pc_ = value; }
         void step();
 
     private:

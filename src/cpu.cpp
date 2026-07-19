@@ -1,9 +1,25 @@
 #include "cpu.h"
 #include "bus.h"
-#include <cstdint>
+#include <cstdio>
 
 CPU::CPU(Bus& bus) : bus_(bus) {
 
+}
+
+void CPU::reset() {
+    // Post-boot-ROM state. (Nintendo logo scroll skipped) set registers to default values.
+    set_af(0x01B0);
+    set_bc(0x0013);
+    set_de(0x00D8);
+    set_hl(0x014D);
+    sp_ = 0xFFFE;
+    pc_ = 0x0100;
+    ime_ = false;
+}
+
+void CPU::print_state() const {
+    std::printf("A:%02X F:%02X B:%02X C:%02X D:%02X E:%02X H:%02X L:%02X SP:%04X PC:%04X\n",
+        a_, f_, b_, c_, d_, e_, h_, l_, sp_, pc_);
 }
 
 void CPU::add(uint8_t value) {

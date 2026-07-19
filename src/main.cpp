@@ -1,24 +1,30 @@
-#include "cartridges/cartridge.h"
-#include "bus.h"
-#include "cpu.h"
+#include "gb.h"
 
 #include <iostream>
 
-int main(int argc, char* argv[]) {
-    Cartridge cart;
-    if (!cart.load("ROMs/pokemon_yellow.gb")) {
-        std::cout << "Failed to load ROM\n";
-        return 1;
+int main() {
+    Gameboy gb;
+
+    // Hand-written program in work RAM (ROM is read-only, so we can't use 0x0100)
+    uint16_t addr = 0xC000;
+    gb.bus().write8(addr + 0, 0x3E);  // LD A,0x42
+    gb.bus().write8(addr + 1, 0x42);
+    gb.bus().write8(addr + 2, 0x06);  // LD B,0x10
+    gb.bus().write8(addr + 3, 0x10);
+    gb.bus().write8(addr + 4, 0x80);  // ADD A,B
+    gb.bus().write8(addr + 5, 0x05);  // DEC B
+    gb.bus().write8(addr + 6, 0x00);  // NOP
+
+    gb.cpu().set_pc(addr);
+
+    std::cout << "Initial: ";
+    gb.cpu().print_state();
+
+    for (int i = 1; i <= 5; i++) {
+        gb.step();
+        std::cout << "Step " << i << ":  ";
+        gb.cpu().print_state();
     }
-
-    std::cout << "ROM loaded successfully!\n";
-    std::cout << "Title: " << cart.title() << "\n";
-    std::cout << "Cartridge type: " << static_cast<int>(cart.cartridge_type()) << "\n";
-    std::cout << "ROM size code: "  << static_cast<int>(cart.rom_size_code()) << "\n";
-    std::cout << "RAM size code: "  << static_cast<int>(cart.ram_size_code()) << "\n";
-
-    Bus bus(cart);
-    CPU cpu(bus);
 
     return 0;
 }
