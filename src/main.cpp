@@ -1,10 +1,15 @@
 #include "gb.h"
 #include <iostream>
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cout << "Usage: gameboy <rom>\n";
+        return 1;
+    }
+
     Gameboy gb;
 
-    if (!gb.load_rom("ROMs/06-ld r,r.gb")) {
+    if (!gb.load_rom(argv[1])) {
         std::cout << "Failed to load ROM\n";
         return 1;
     }

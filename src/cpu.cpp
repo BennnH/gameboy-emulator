@@ -1371,11 +1371,3 @@ void CPU::step() {
             break;
     }
 }
-
-void CPU::execute_cb(uint8_t opcode) {
-    switch (opcode) {
-        default:
-            // CB table not implemented yet
-            break;
-    }
-}

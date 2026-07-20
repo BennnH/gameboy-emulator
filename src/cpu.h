@@ -93,6 +93,15 @@ class CPU {
         void ret_conditional(bool condition);
         void rst(uint16_t vector);
         uint16_t add_sp_i8();
+        uint8_t rlc(uint8_t value);
+        uint8_t rrc(uint8_t value);
+        uint8_t rl(uint8_t value);
+        uint8_t rr(uint8_t value);
+        uint8_t sla(uint8_t value);
+        uint8_t sra(uint8_t value);
+        uint8_t swap(uint8_t value);
+        uint8_t srl(uint8_t value);
+        void bit(uint8_t bit_number, uint8_t value);
         void execute_cb(uint8_t opcode);
         uint16_t read_u16();
 
