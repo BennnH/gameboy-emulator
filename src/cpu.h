@@ -11,7 +11,7 @@ class CPU {
         void print_state() const;
         // Debug only - lets tests point the CPU at hand-written code
         void set_pc(uint16_t value) { pc_ = value; }
-        void step();
+        int step();
 
     private:
         // Flag bit masks (more explainable than magic nums in code)
@@ -34,6 +34,9 @@ class CPU {
         uint16_t pc_{};
 
         bool ime_{};   // Interrupt Master Enable
+
+        // Current num of t-cycles used by an instruction and returned at the end of a step.
+        int cycles_{};
 
         // Can access registers as higher and lower bytes of pairs, so for now just use getters and setters to
         // update individual registers

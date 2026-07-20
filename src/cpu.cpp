@@ -2,6 +2,50 @@
 #include "bus.h"
 #include <cstdio>
 
+
+// T-cycle cost of each unprefixed opcode.
+// Conditional branches store the NOT-TAKEN cost; the conditional
+// helpers add the extra cycles when the branch is actually taken.
+static constexpr uint8_t opcode_cycles[256] = {
+     4, 12,  8,  8,  4,  4,  8,  4, 20,  8,  8,  8,  4,  4,  8,  4,   // 0x00
+     4, 12,  8,  8,  4,  4,  8,  4,  8,  8,  8,  8,  4,  4,  8,  4,   // 0x10
+     8, 12,  8,  8,  4,  4,  8,  4,  8,  8,  8,  8,  4,  4,  8,  4,   // 0x20
+     8, 12,  8,  8, 12, 12, 12,  4,  8,  8,  8,  8,  4,  4,  8,  4,   // 0x30
+     4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,   // 0x40
+     4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,   // 0x50
+     4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,   // 0x60
+     8,  8,  8,  8,  8,  8,  4,  8,  4,  4,  4,  4,  4,  4,  8,  4,   // 0x70
+     4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,   // 0x80
+     4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,   // 0x90
+     4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,   // 0xA0
+     4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,   // 0xB0
+     8, 12, 12, 12, 12, 16,  8, 16,  8, 16, 12,  0, 12, 12,  8, 16,   // 0xC0
+     8, 12, 12,  0, 12, 16,  8, 16,  8, 16, 12,  0, 12,  0,  8, 16,   // 0xD0
+    12, 12,  8,  0,  0, 16,  8, 16, 16,  4, 16,  0,  0,  0,  8, 16,   // 0xE0
+    12, 12,  8,  4,  0, 16,  8, 16, 12,  8, 16,  4,  0,  0,  8, 16,   // 0xF0
+};
+
+// T-cycle cost of each CB-prefixed opcode (includes the 0xCB prefix fetch).
+static constexpr uint8_t cb_opcode_cycles[256] = {
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCB00
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCB10
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCB20
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCB30
+     8,  8,  8,  8,  8,  8, 12,  8,  8,  8,  8,  8,  8,  8, 12,  8,   // 0xCB40
+     8,  8,  8,  8,  8,  8, 12,  8,  8,  8,  8,  8,  8,  8, 12,  8,   // 0xCB50
+     8,  8,  8,  8,  8,  8, 12,  8,  8,  8,  8,  8,  8,  8, 12,  8,   // 0xCB60
+     8,  8,  8,  8,  8,  8, 12,  8,  8,  8,  8,  8,  8,  8, 12,  8,   // 0xCB70
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCB80
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCB90
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCBA0
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCBB0
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCBC0
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCBD0
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCBE0
+     8,  8,  8,  8,  8,  8, 16,  8,  8,  8,  8,  8,  8,  8, 16,  8,   // 0xCBF0
+};
+
+
 CPU::CPU(Bus& bus) : bus_(bus) {
 
 }
@@ -175,6 +219,7 @@ void CPU::jr_conditional(bool condition) {
     pc_++;
     if (condition) {
         pc_ += offset;
+        cycles_ += 4;
     }
 }
 
@@ -213,6 +258,7 @@ void CPU::jp_conditional(bool condition) {
     uint16_t address = read_u16();
     if (condition) {
         pc_ = address;
+        cycles_+= 4;
     }
 }
 
@@ -221,12 +267,14 @@ void CPU::call_conditional(bool condition) {
     if (condition) {
         push16(pc_);
         pc_ = address;
+        cycles_ += 12;
     }
 }
 
 void CPU::ret_conditional(bool condition) {
     if (condition) {
         pc_ = pop16();
+        cycles_ += 12;
     }
 }
 
@@ -261,9 +309,10 @@ uint16_t CPU::read_u16() {
     return (high << 8) | low;
 }
 
-void CPU::step() {
+int CPU::step() {
     uint8_t opcode = bus_.read8(pc_);
     pc_++;
+    cycles_ = opcode_cycles[opcode];
 
     switch (opcode) {
         // NOP
@@ -1169,6 +1218,7 @@ void CPU::step() {
         case 0xCB: {
             uint8_t cb_opcode = bus_.read8(pc_);
             pc_++;
+            cycles_ = cb_opcode_cycles[cb_opcode];
             execute_cb(cb_opcode);
             break;
         }
@@ -1370,4 +1420,6 @@ void CPU::step() {
             // Unimplemented opcode, come back to this and sort it out.
             break;
     }
+
+    return cycles_;
 }
