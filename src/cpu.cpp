@@ -1,5 +1,6 @@
 #include "cpu.h"
 #include "bus.h"
+#include <cstdint>
 #include <cstdio>
 
 
@@ -310,6 +311,31 @@ uint16_t CPU::read_u16() {
 }
 
 int CPU::step() {
+    // Before fetch, decode, execute, we need to see if interrupt handling is enabled, and if so
+    // if there are any interrupts to be resolved.
+    if (ime_ && (bus_.read8(0xFFFF) & bus_.read8(0xFF0F) & 0x1F)){
+        push16(pc_);
+        ime_ = false;
+
+        // If multiple interrupts at once, we prioritise from lowest bits
+        uint8_t current_interrupt = bus_.read8(0xFFFF) & bus_.read8(0xFF0F) & 0x1F;
+        for (int i = 0; i < 5; i++) {
+            // Clear this specific interrupts bit from the IF register
+            if (current_interrupt & (1 << i)) {
+                uint8_t if_register = bus_.read8(0xFF0F);
+                // Clear the interrupt we are about to resolve and write the updated copy back
+                if_register &= ~(1 << i);
+                bus_.write8(0xFF0F, if_register);
+
+                // Jump to the specific interupts handler logic
+                pc_ = 0x40 + i * 8;
+                break;
+
+            }
+        }
+
+
+    }
     uint8_t opcode = bus_.read8(pc_);
     pc_++;
     cycles_ = opcode_cycles[opcode];
