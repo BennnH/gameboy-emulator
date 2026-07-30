@@ -333,9 +333,12 @@ int CPU::step() {
 
             }
         }
-
-
     }
+
+    // ime pending might be updated during the 1 instruction delay so we need to store its state at the start of this instruction
+    bool enable_ime_now = ime_pending_;
+    ime_pending_ = false;
+
     uint8_t opcode = bus_.read8(pc_);
     pc_++;
     cycles_ = opcode_cycles[opcode];
@@ -1426,9 +1429,8 @@ int CPU::step() {
             break;
             // EI - enable interrupts
         case 0xFB:
-            // Dont think this should set immediately, should be delayed by one instruction when
-            // sorting out actual instruction timings.
-            ime_ = true;
+            // Delaying by 1 instruction so set to pending, then the next instuction will enable interrupts again
+            ime_pending_ = true;
             break;
         // CP A,u8
         case 0xFE: {
@@ -1445,6 +1447,10 @@ int CPU::step() {
         default:
             // Unimplemented opcode, come back to this and sort it out.
             break;
+    }
+
+    if (enable_ime_now) {
+        ime_ = true;
     }
 
     return cycles_;

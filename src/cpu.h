@@ -34,6 +34,7 @@ class CPU {
         uint16_t pc_{};
 
         bool ime_{};   // Interrupt Master Enable
+        bool ime_pending_{}; // Since IE needs to be delayed by one instruction we delay it with a second var
 
         // Current num of t-cycles used by an instruction and returned at the end of a step.
         int cycles_{};
