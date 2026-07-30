@@ -15,6 +15,7 @@ void Gameboy::step() {
 
 void Gameboy::run(int max_steps) {
     for (int i = 0; i < max_steps; i ++) {
-        cpu_.step();
+        int cycles = cpu_.step();
+        bus_.tick(cycles);
     }
 }

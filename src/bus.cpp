@@ -12,6 +12,10 @@ uint8_t Bus::read8(uint16_t address) const {
     if (address <= 0x7FFF) {
         return cartridge_.read(address);
     }
+
+    if (address == 0xFF0F) {
+        return this->memory_[address] | 0xE0;
+    }
     // For now everything else is just this temp memory array for now
     return this->memory_[address];
 }
@@ -30,4 +34,8 @@ void Bus::write8(uint16_t address, uint8_t value) {
         // Clear to signal the transfer is done which is done by actual hardware.
         this->memory_[0xFF02] = 0x01;
     }
+}
+
+void Bus::tick(int cycles) {
+    cycles_ += cycles;
 }
