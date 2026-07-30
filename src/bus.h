@@ -13,6 +13,8 @@ class Bus {
         void write8(uint16_t address, uint8_t value);
 
         void tick(int cycles);
+
+        int get_tac_speed() const;
     private:
         Cartridge& cartridge_;
         // Used for now for non rom regions.
@@ -20,5 +22,8 @@ class Bus {
 
         // Total t cycles since boot
         uint64_t cycles_{};
+
+        int div_counter_{};
+        int tima_counter_{};
 
 };

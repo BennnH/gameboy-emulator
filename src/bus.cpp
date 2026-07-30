@@ -38,4 +38,45 @@ void Bus::write8(uint16_t address, uint8_t value) {
 
 void Bus::tick(int cycles) {
     cycles_ += cycles;
+
+    // DIV, which is always running
+    div_counter_ += cycles;
+    // Increment the DIV register if it overflows
+    while (div_counter_ >= 256) {
+        div_counter_ -= 256;
+        memory_[0xFF04]++;
+    }
+
+    // TIMA, only if the enbled bit is on in the TAC register
+    if (memory_[0xFF07] & 0x04){
+        tima_counter_ += cycles;
+        int tima_threshold = get_tac_speed();
+
+        while (tima_counter_ >= tima_threshold) {
+            tima_counter_ -= tima_threshold;
+            if (memory_[0xFF05] == 0xFF) {
+                // This increment would make it overflow, so we reset to TMA (the reset value) and raise the timer interupt.
+                memory_[0xFF05] = memory_[0xFF06]; // TMA
+                memory_[0xFF0F] |= 0x04; // raise the timer bit of interupt flag register.
+            } else {
+                memory_[0xFF05]++;
+            }
+        }
+    }
+}
+
+
+int Bus::get_tac_speed() const{
+    switch (memory_[0xFF07] & 0x03) {
+        case 0x00:
+            return 1024;
+        case 0x01:
+            return 16;
+        case 0x02:
+            return 64;
+        case 0x03:
+            return 256;
+    }
+    // Just default to this for now to keep compiler happy.
+    return 1024;
 }
