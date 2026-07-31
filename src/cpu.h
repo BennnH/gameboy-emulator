@@ -36,6 +36,9 @@ class CPU {
         bool ime_{};   // Interrupt Master Enable
         bool ime_pending_{}; // Since IE needs to be delayed by one instruction we delay it with a second var
 
+        bool halted_{}; // CPU is halted/asleep and waiting for an interrupt
+        bool halt_bug_{}; // Intentional hardware bug behavior, reads the next instruction twice on next fetch.
+
         // Current num of t-cycles used by an instruction and returned at the end of a step.
         int cycles_{};
 

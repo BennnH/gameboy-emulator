@@ -311,6 +311,15 @@ uint16_t CPU::read_u16() {
 }
 
 int CPU::step() {
+    // Checks if currently halted, if so then just increment the clock by 1 M cycle (4 t-cycles) and skip.
+    if (halted_) {
+        if (bus_.read8(0xFFFF) & bus_.read8(0xFF0F) & 0x1F) {
+            // Interrupt pending so stop halting
+            halted_ = false;
+        } else {
+            return 4;
+        }
+    }
     // Before fetch, decode, execute, we need to see if interrupt handling is enabled, and if so
     // if there are any interrupts to be resolved.
     if (ime_ && (bus_.read8(0xFFFF) & bus_.read8(0xFF0F) & 0x1F)){
@@ -340,7 +349,12 @@ int CPU::step() {
     ime_pending_ = false;
 
     uint8_t opcode = bus_.read8(pc_);
-    pc_++;
+    // HALT BUG - See instuction 0x76 for details
+    if (halt_bug_) {
+        halt_bug_ = false;
+    } else {
+        pc_++;
+    }
     cycles_ = opcode_cycles[opcode];
 
     switch (opcode) {
@@ -895,8 +909,16 @@ int CPU::step() {
         case 0x75:
             bus_.write8(get_hl(), l_);
             break;
-        // HALT: Need to come back to this once interrupts are implemented
+        // HALT
         case 0x76:
+            if (!ime_ && (bus_.read8(0xFFFF) & bus_.read8(0xFF0F) & 0x1F)) {
+                // Intentional hardware bug replicated: interrupts are turned off but one
+                // already pending, so the CPU doesn't actually stop, and the next instruction
+                // is read twice.
+                halt_bug_ = true;
+            } else {
+                halted_ = true;
+            }
             break;
         // LD (HL),A
         case 0x77:
