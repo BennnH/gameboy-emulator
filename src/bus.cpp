@@ -1,7 +1,7 @@
 #include "bus.h"
 #include "cartridges/cartridge.h"
 
-#include <stdio.h>
+#include <cstdio>
 
 
 Bus::Bus(Cartridge& cartridge) : cartridge_(cartridge) {

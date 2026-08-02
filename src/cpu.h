@@ -113,5 +113,4 @@ class CPU {
         uint16_t read_u16();
 
         Bus& bus_;
-
 };

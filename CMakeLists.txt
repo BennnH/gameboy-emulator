@@ -12,6 +12,7 @@ add_executable(gameboy
     src/cpu.cpp
     src/cpu_cb.cpp
     src/bus.cpp
+    src/ppu.cpp
     src/cartridges/cartridge.cpp
 )
 

@@ -1,7 +1,6 @@
 #include "gb.h"
-#include "cpu.h"
 
-Gameboy::Gameboy() : bus_(cartridge_), cpu_(bus_) {
+Gameboy::Gameboy() : bus_(cartridge_), cpu_(bus_), ppu_(bus_){
     cpu_.reset();
 }
 
@@ -10,12 +9,13 @@ bool Gameboy::load_rom(const std::string& filename) {
 }
 
 void Gameboy::step() {
-    cpu_.step();
+    int cycles = cpu_.step();
+    bus_.tick(cycles);
+    ppu_.tick(cycles);
 }
 
 void Gameboy::run(int max_steps) {
     for (int i = 0; i < max_steps; i ++) {
-        int cycles = cpu_.step();
-        bus_.tick(cycles);
+        step();
     }
 }

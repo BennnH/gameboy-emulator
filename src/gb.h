@@ -2,6 +2,7 @@
 
 #include "bus.h"
 #include "cpu.h"
+#include "ppu.h"
 #include "cartridges/cartridge.h"
 
 #include <string>
@@ -24,4 +25,5 @@ class Gameboy {
         Cartridge cartridge_;
         Bus bus_;
         CPU cpu_;
+        PPU ppu_;
 };
