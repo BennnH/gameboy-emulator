@@ -1,5 +1,8 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
+
 
 struct SDL_Window;
 struct SDL_Renderer;
@@ -9,6 +12,8 @@ class Display {
     public:
         explicit Display(int scale);
         ~Display();
+
+        void render(const std::array<uint8_t, 160 * 144>& frame);
 
     private:
         SDL_Window* window_{};
