@@ -12,6 +12,10 @@ class PPU {
         uint8_t read_register(uint16_t address) const;
         void write_register(uint16_t address, uint8_t value);
 
+        const std::array<uint8_t, 160*144>& get_frame() const {
+            return frame_;
+        }
+
     private:
         Bus& bus_;
 
@@ -20,4 +24,7 @@ class PPU {
         uint8_t mode_{};
         uint8_t current_scanline_{};
         int current_cycles_{};
+
+        uint8_t decode_pixel(uint8_t low_byte, uint8_t high_byte, int x) const;
+        void render_scanline();
 };

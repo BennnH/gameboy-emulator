@@ -8,14 +8,23 @@ bool Gameboy::load_rom(const std::string& filename) {
     return cartridge_.load(filename);
 }
 
-void Gameboy::step() {
+int Gameboy::step() {
     int cycles = cpu_.step();
     bus_.tick(cycles);
     ppu_.tick(cycles);
+    return cycles;
 }
 
 void Gameboy::run(int max_steps) {
     for (int i = 0; i < max_steps; i ++) {
         step();
+    }
+}
+
+
+void Gameboy::run_frame() {
+    int frame_cycles = 0;
+    while (frame_cycles < 70224) {
+        frame_cycles += step();
     }
 }

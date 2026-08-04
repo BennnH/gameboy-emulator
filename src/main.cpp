@@ -16,18 +16,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::cout << "Running test ROM...\n";
-    gb.run(10000000);
-    std::cout << "\nDone.\n";
-
     // Testing Display
     Display display(4);
-
-    // Testing one frame cycling across the shades.
-    std::array<uint8_t, 160 * 144> test_frame{};
-    for (int i = 0; i < 160 * 144; i++) {
-        test_frame[i] = (i / 40) % 4;
-    }
 
     bool running = true;
     while (running) {
@@ -38,7 +28,8 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        display.render(test_frame);
+        gb.run_frame();
+        display.render(gb.ppu().get_frame());
     }
 
     return 0;

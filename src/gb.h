@@ -13,13 +13,14 @@ class Gameboy {
         Gameboy();
 
         bool load_rom(const std::string& filename);
-        void step();
+        int step();
         void run(int max_steps);
+        void run_frame();
 
 
-        // Accessors for debugging for now when doing small hand written tests
         CPU& cpu() { return cpu_; }
         Bus& bus() { return bus_; }
+        PPU& ppu() { return ppu_; }
 
     private:
         Cartridge cartridge_;
