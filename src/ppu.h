@@ -9,8 +9,6 @@ class PPU {
         explicit PPU(Bus& bus);
 
         void tick(int cycles);
-        uint8_t read_register(uint16_t address) const;
-        void write_register(uint16_t address, uint8_t value);
 
         const std::array<uint8_t, 160*144>& get_frame() const {
             return frame_;
