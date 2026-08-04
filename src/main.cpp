@@ -16,11 +16,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Testing Display
     Display display(4);
+
+    const int ms_per_frame = 1000 / 60;
 
     bool running = true;
     while (running) {
+        uint32_t frame_start = SDL_GetTicks();
+
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
@@ -30,7 +33,11 @@ int main(int argc, char* argv[]) {
 
         gb.run_frame();
         display.render(gb.ppu().get_frame());
-    }
 
+        uint32_t frame_duration = SDL_GetTicks() - frame_start;
+        if (frame_duration < ms_per_frame) {
+            SDL_Delay(ms_per_frame - frame_duration);
+        }
+    }
     return 0;
 }
