@@ -4,6 +4,14 @@
 #include <cstdint>
 class Bus;
 
+struct Sprite {
+    uint8_t y;
+    uint8_t x;
+    uint8_t tile;
+    uint8_t flags;
+};
+
+
 class PPU {
     public:
         explicit PPU(Bus& bus);
@@ -24,4 +32,6 @@ class PPU {
 
         uint8_t decode_pixel(uint8_t low_byte, uint8_t high_byte, int x) const;
         void render_scanline();
+        Sprite get_sprite(int index) const;
+        void render_sprites();
 };

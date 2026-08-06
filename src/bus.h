@@ -21,6 +21,7 @@ class Bus {
         void tick(int cycles);
 
         int get_tac_speed() const;
+        void perform_oam_dma(uint8_t value);
     private:
         Cartridge& cartridge_;
         // Memory regions from pandocs memory map.

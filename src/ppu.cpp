@@ -32,6 +32,7 @@ void PPU::tick(int cycles) {
 
         if (current_scanline_ < 144) {
             render_scanline();
+            render_sprites();
         }
 
         if (current_scanline_ == 144) {
@@ -104,4 +105,53 @@ void PPU::render_scanline() {
 
         frame_[y * 160 + x] = shade;
     }
+}
+
+
+void PPU::render_sprites() {
+    int y = current_scanline_;
+
+    for (int i = 0; i < 40; i++) {
+        Sprite current_sprite = get_sprite(i);
+
+        int screen_y = current_sprite.y - 16;
+        int screen_x = current_sprite.x - 8;
+
+        if (y >= screen_y && y < screen_y + 8) {
+            int row = y - screen_y;
+
+            uint16_t tile_address = 0x8000 + (current_sprite.tile * 16) + (row * 2);
+            uint8_t low_byte  = bus_.read8(tile_address);
+            uint8_t high_byte = bus_.read8(tile_address + 1);
+
+            for (int col = 0; col < 8; col++) {
+                uint8_t colour = decode_pixel(low_byte, high_byte, col);
+
+                // Skip if colour is 0 (transparent)
+                if (colour == 0) {
+                    continue;
+                }
+
+                int pixel_x = screen_x + col;
+                // Skip if the sprite goes out of bounds.
+                if (pixel_x < 0 || pixel_x >= 160) {
+                    continue;
+                }
+
+                frame_[y * 160 + pixel_x] = colour;
+            }
+        }
+    }
+}
+
+
+Sprite PPU::get_sprite(int index) const {
+    uint16_t address = 0xFE00 + (index * 4);
+    uint8_t y = bus_.read8(address);
+    uint8_t x = bus_.read8(address + 1);
+    uint8_t tile = bus_.read8(address + 2);
+    uint8_t flags = bus_.read8(address + 3);
+
+    Sprite current_sprite = { y, x, tile, flags };
+    return current_sprite;
 }

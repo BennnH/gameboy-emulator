@@ -47,6 +47,10 @@ void Bus::write_io(uint16_t address, uint8_t value) {
         io_[0xFF02 - 0xFF00] = 0x01;
         return;
     }
+    // OAM direct memory access.
+    if (address == 0xFF46) {
+        perform_oam_dma(value);
+    }
     io_[address - 0xFF00] = value;
 }
 
@@ -184,6 +188,14 @@ int Bus::get_tac_speed() const{
     }
     // Just default to this for now to keep compiler happy.
     return 1024;
+}
+
+
+void Bus::perform_oam_dma(uint8_t value) {
+    uint16_t source = value << 8;
+    for (int i = 0; i < 160; i++) {
+        write8(0xFE00 + i, read8(source + i));
+    }
 }
 
 
