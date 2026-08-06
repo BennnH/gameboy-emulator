@@ -8,9 +8,12 @@ class Cartridge;
 class Bus {
     public:
         explicit Bus(Cartridge& cartridge);
+        void reset();
 
         uint8_t read8(uint16_t address) const;
         void write8(uint16_t address, uint8_t value);
+
+        void set_button_state(uint8_t button_mask, bool pressed);
 
         uint8_t read_io(uint16_t address) const;
         void write_io(uint16_t address, uint8_t value);
@@ -40,5 +43,7 @@ class Bus {
 
         int div_counter_{};
         int tima_counter_{};
+
+        uint8_t button_state_{0x00};
 
 };

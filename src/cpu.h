@@ -11,6 +11,7 @@ class CPU {
         void print_state() const;
         // Debug only - lets tests point the CPU at hand-written code
         void set_pc(uint16_t value) { pc_ = value; }
+        uint16_t get_pc() const { return pc_; }
         int step();
 
     private:

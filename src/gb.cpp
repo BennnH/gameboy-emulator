@@ -1,6 +1,7 @@
 #include "gb.h"
 
 Gameboy::Gameboy() : bus_(cartridge_), cpu_(bus_), ppu_(bus_){
+    bus_.reset();
     cpu_.reset();
 }
 

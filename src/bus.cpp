@@ -7,10 +7,31 @@
 Bus::Bus(Cartridge& cartridge) : cartridge_(cartridge) {
 }
 
+
+void Bus::reset() {
+    write_io(0xFF40, 0x91); // LCDC: LCD on, BG on, tile data 0x8000, tilemap 0x9800
+    write_io(0xFF47, 0xFC); // BGP: standard post-boot background palette
+}
+
+
 uint8_t Bus::read_io(uint16_t address) const {
     // Interupt flag register. Top 3 bits aren't used and always have value '1'
     if (address == 0xFF0F) {
         return io_[address - 0xFF00] | 0xE0;
+    }
+    if (address == 0xFF00) {
+        uint8_t selection = io_[0];
+        bool select_dir = !(selection & 0x10);
+        bool select_act = !(selection & 0x20);
+
+        uint8_t dir_nibble = (~button_state_) & 0x0F;
+        uint8_t act_nibble = (~(button_state_ >> 4)) & 0x0F;
+
+        uint8_t bits = 0x0F;
+        if (select_dir) bits &= dir_nibble;
+        if (select_act) bits &= act_nibble;
+
+        return 0xC0 | (selection & 0x30) | bits;
     }
     return io_[address - 0xFF00];
 }
@@ -163,4 +184,13 @@ int Bus::get_tac_speed() const{
     }
     // Just default to this for now to keep compiler happy.
     return 1024;
+}
+
+
+void Bus::set_button_state(uint8_t button_mask, bool pressed) {
+    if (pressed) {
+        button_state_ |= button_mask;
+    } else {
+        button_state_ &= ~button_mask;
+    }
 }

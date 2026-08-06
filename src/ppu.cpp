@@ -9,6 +9,21 @@ PPU::PPU(Bus& bus) : bus_(bus) {
 
 
 void PPU::tick(int cycles) {
+    // Real hardware fully stops the PPU while the LCD is off (LCDC bit 7 = 0).
+    // no rendering, no VBlank interrupt, until the game turns it back on.
+    uint8_t lcdc = bus_.read8(0xFF40);
+    if (!(lcdc & 0x80)) {
+        if (current_scanline_ != 0 || current_cycles_ != 0) {
+            current_scanline_ = 0;
+            current_cycles_ = 0;
+            bus_.write8(0xFF44, 0);
+            uint8_t stat_reg = bus_.read8(0xFF41);
+            bus_.write8(0xFF41, stat_reg & 0xFC);
+        }
+        return;
+    }
+
+
     current_cycles_ += cycles;
     while (current_cycles_ >= 456) {
         current_cycles_ -= 456;
@@ -28,6 +43,7 @@ void PPU::tick(int cycles) {
 
         if (current_scanline_ > 153) {
             current_scanline_ = 0;
+            bus_.write8(0xFF44, current_scanline_);
         }
     }
 }

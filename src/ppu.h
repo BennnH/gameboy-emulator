@@ -19,7 +19,6 @@ class PPU {
 
         std::array<uint8_t, 160*144> frame_{};
 
-        uint8_t mode_{};
         uint8_t current_scanline_{};
         int current_cycles_{};
 
