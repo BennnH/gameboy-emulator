@@ -1,6 +1,6 @@
 # Game Boy Emulator
 
-A Game Boy (DMG) emulator written from scratch in C++. The CPU is complete and passes Blargg's `cpu_instrs` and `instr_timing` tests.
+A Game Boy (DMG) emulator written from scratch in C++. The CPU is complete and passes Blargg's `cpu_instrs` and `instr_timing` tests. SDL 2 display also implemented rendering background and sprites, and takes user input interacting with ROMs.
 
 ## Build
 
@@ -13,10 +13,7 @@ cmake --build build
 
 ## TODO
 
-1. Add PPU
-2. Add display output
-3. Add input
-4. Add debug tool (Step through instructions, show registers, etc.)
-5. Add MBC support
-6. Add APU
-7. Build GUI frontend
+1. Add debug tool (Step through instructions, show registers, etc.)
+2. Add MBC support
+3. Add APU
+4. Build GUI frontend
