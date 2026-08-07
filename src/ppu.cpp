@@ -16,6 +16,7 @@ void PPU::tick(int cycles) {
         if (current_scanline_ != 0 || current_cycles_ != 0) {
             current_scanline_ = 0;
             current_cycles_ = 0;
+            current_window_line_ = 0;
             bus_.write8(0xFF44, 0);
             uint8_t stat_reg = bus_.read8(0xFF41);
             bus_.write8(0xFF41, stat_reg & 0xFC);
@@ -26,13 +27,15 @@ void PPU::tick(int cycles) {
     current_cycles_ += cycles;
     while (current_cycles_ >= 456) {
         current_cycles_ -= 456;
-        current_scanline_ ++;
-        bus_.write8(0xFF44, current_scanline_);
 
         if (current_scanline_ < 144) {
             render_scanline();
+            render_window();
             render_sprites();
         }
+
+        current_scanline_ ++;
+        bus_.write8(0xFF44, current_scanline_);
 
         if (current_scanline_ == 144) {
             // Entered Vertical Blank, so set bottom bit on IF reg to on.
@@ -43,6 +46,7 @@ void PPU::tick(int cycles) {
 
         if (current_scanline_ > 153) {
             current_scanline_ = 0;
+            current_window_line_ = 0;
             bus_.write8(0xFF44, current_scanline_);
         }
     }
@@ -95,6 +99,7 @@ void PPU::render_scanline() {
     if (!(LCDC_reg & 0x01)) {
         // Bit 0 off: background disabled, this line shows blank (shade 0)
         for (int x = 0; x < 160; x++) {
+            bg_colour_index_[y * 160 + x] = 0;
             frame_[y * 160 + x] = 0;
         }
         return;
@@ -133,8 +138,75 @@ void PPU::render_scanline() {
         uint8_t bgp = bus_.read8(0xFF47);
         uint8_t shade = (bgp >> (colour_index * 2)) & 0x03;
 
+        bg_colour_index_[y * 160 + x] = colour_index;
         frame_[y * 160 + x] = shade;
     }
+}
+
+
+void PPU::render_window() {
+    uint8_t LCDC_reg = bus_.read8(0xFF40);
+
+    // Bit 5 = window enable.
+    if (!(LCDC_reg & 0x20)) {
+        return;
+    }
+
+    uint8_t wy = bus_.read8(0xFF4A);
+    int y = current_scanline_;
+
+    // Window hasn't reached its starting row this frame so nothing to draw
+    if (y < wy) {
+        return;
+    }
+
+    uint8_t wx = bus_.read8(0xFF4B);
+    int window_x_start = wx - 7;
+
+    // Bit 6 = window's own tilemap select
+    uint16_t map_base = (LCDC_reg & 0x40) ? 0x9C00 : 0x9800;
+
+    bool unsigned_mode = LCDC_reg & 0x10;
+
+    for (int x = 0; x < 160; x++) {
+        int screen_x = x - window_x_start;
+
+        // This pixel hasn't reached the window's left edge yet - skip it,
+        // background stays showing here.
+        if (screen_x < 0) {
+            continue;
+        }
+
+        int tile_col = screen_x / 8;
+        int tile_row = current_window_line_ / 8;
+
+        uint16_t map_address = map_base + (tile_row * 32) + tile_col;
+        uint8_t tile = bus_.read8(map_address);
+
+        int pixel_col = screen_x % 8;
+        int pixel_row = current_window_line_ % 8;
+
+        uint16_t tile_address;
+        if (unsigned_mode) {
+            tile_address = 0x8000 + (tile * 16) + (pixel_row * 2);
+        } else {
+            int8_t signed_tile = (int8_t)tile;
+            tile_address = 0x9000 + (signed_tile * 16) + (pixel_row * 2);
+        }
+
+        uint8_t low_byte = bus_.read8(tile_address);
+        uint8_t high_byte = bus_.read8(tile_address + 1);
+
+        uint8_t colour_index = decode_pixel(low_byte, high_byte, pixel_col);
+
+        uint8_t bgp = bus_.read8(0xFF47);
+        uint8_t shade = (bgp >> (colour_index * 2)) & 0x03;
+
+        bg_colour_index_[y * 160 + x] = colour_index;
+        frame_[y * 160 + x] = shade;
+    }
+
+    current_window_line_++;
 }
 
 
@@ -216,10 +288,14 @@ void PPU::render_sprites() {
             uint8_t low_byte  = bus_.read8(tile_address);
             uint8_t high_byte = bus_.read8(tile_address + 1);
 
+            // These are behaviors defined in the sprites flag.
             // Bit 4 of the sprite's flags picks which palette: 0 = OBP0, 1 = OBP1
+            // bg_priority is for times when we want to break the regular rule of sprites having priority over background
+            // and the background is rendered over the sprite. Like if we wanted a sprite to go behind a tree or a door.
             uint16_t palette_address = (current_sprite.flags & 0x10) ? 0xFF49 : 0xFF48;
             uint8_t obp = bus_.read8(palette_address);
             bool x_flip = current_sprite.flags & 0x20;
+            bool bg_priority = current_sprite.flags & 0x80;
 
             for (int col = 0; col < 8; col++) {
                 // Accounts for if the flag for the sprite says to flip the sprite or not.
@@ -234,6 +310,10 @@ void PPU::render_sprites() {
                 int pixel_x = screen_x + col;
                 // Skip if the sprite goes out of bounds.
                 if (pixel_x < 0 || pixel_x >= 160) {
+                    continue;
+                }
+
+                if (bg_priority && bg_colour_index_[y * 160 + pixel_x] != 0) {
                     continue;
                 }
 
