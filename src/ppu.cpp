@@ -150,8 +150,43 @@ void PPU::render_sprites() {
 
     int y = current_scanline_;
 
-    for (int i = 0; i < 40; i++) {
+    // Do a first pass. Real Hardware can only track 10 sprites per scanline, so scan first 10 that encounter.
+    struct Candidate {
+        Sprite sprite;
+        int oam_index;
+    };
+    Candidate candidates[10];
+    int candidate_count = 0;
+
+    for (int i = 0; i < 40 && candidate_count < 10; i++) {
         Sprite current_sprite = get_sprite(i);
+        int screen_y = current_sprite.y - 16;
+        if (y >= screen_y && y < screen_y + sprite_height) {
+            candidates[candidate_count] = { current_sprite, i };
+            candidate_count++;
+        }
+    }
+
+    // Need to order the sprites. Priority goes to lower x value, then ties are broken by lower OAM index.
+    // So we need to draw lowest priority to highest priority, so the lower ones may be overwritten and the higher
+    // priority ends up being drawn on top. Just a bubble sort with tie breaks.
+    for (int i = 0; i < candidate_count; i++) {
+        for (int j = i + 1; j < candidate_count; j++) {
+            bool should_swap = candidates[j].sprite.x > candidates[i].sprite.x ||
+                (candidates[j].sprite.x == candidates[i].sprite.x &&
+                 candidates[j].oam_index > candidates[i].oam_index);
+            if (should_swap) {
+                Candidate temp = candidates[i];
+                candidates[i] = candidates[j];
+                candidates[j] = temp;
+            }
+        }
+    }
+
+    // Draw in reverse priority order so sprites with lowest priority get drawn first.
+
+    for (int i = 0; i < candidate_count; i++) {
+        Sprite current_sprite = candidates[i].sprite;
 
         int screen_y = current_sprite.y - 16;
         int screen_x = current_sprite.x - 8;
