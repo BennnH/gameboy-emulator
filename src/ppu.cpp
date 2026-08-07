@@ -23,7 +23,6 @@ void PPU::tick(int cycles) {
         return;
     }
 
-
     current_cycles_ += cycles;
     while (current_cycles_ >= 456) {
         current_cycles_ -= 456;
@@ -47,6 +46,28 @@ void PPU::tick(int cycles) {
             bus_.write8(0xFF44, current_scanline_);
         }
     }
+
+    uint8_t mode;
+    if (current_scanline_ >= 144) {
+        mode = 1;
+    } else if (current_cycles_ < 80) {
+        mode = 2;
+    } else if (current_cycles_ < 252) {
+        mode = 3;
+    } else {
+        mode = 0;
+    }
+
+    uint8_t stat_reg = bus_.read8(0xFF41);
+    stat_reg = (stat_reg & 0xFC) | mode;
+
+    uint8_t lyc = bus_.read8(0xFF45);
+    if (current_scanline_ == lyc) {
+        stat_reg |= 0x04;
+    } else {
+        stat_reg &= ~0x04;
+    }
+    bus_.write8(0xFF41, stat_reg);
 }
 
 
@@ -69,6 +90,15 @@ void PPU::render_scanline() {
     // If bit 4 of LCDC register is on, we get the tile data offset from 0x8000, otherwise we start from 0x9000
     uint8_t LCDC_reg = bus_.read8(0xFF40);
     bool unsigned_mode = LCDC_reg & 0x10;
+    uint16_t map_base = (LCDC_reg & 0x08) ? 0x9C00 : 0x9800;
+
+    if (!(LCDC_reg & 0x01)) {
+        // Bit 0 off: background disabled, this line shows blank (shade 0)
+        for (int x = 0; x < 160; x++) {
+            frame_[y * 160 + x] = 0;
+        }
+        return;
+    }
 
     for (int x = 0; x < 160; x++) {
         // Figuring out which 8x8 tile this pixel falls into, using the scroll offset + wrapping it.
@@ -78,7 +108,7 @@ void PPU::render_scanline() {
         int tile_col = background_x / 8;
         int tile_row = background_y / 8;
 
-        uint16_t map_address = 0x9800 + (tile_row * 32) + tile_col;
+        uint16_t map_address = map_base + (tile_row * 32) + tile_col;
         uint8_t tile = bus_.read8(map_address);
 
         // Specific pixel within the tile
@@ -109,6 +139,15 @@ void PPU::render_scanline() {
 
 
 void PPU::render_sprites() {
+    uint8_t LCDC_reg = bus_.read8(0xFF40);
+    if (!(LCDC_reg & 0x02)) {
+        return;
+    }
+
+    // LCDC reg can specift to have taller 8x16 sprites instead of the usual 8x8
+    bool tall_sprites = LCDC_reg & 0x04;
+    int sprite_height = tall_sprites ? 16 : 8;
+
     int y = current_scanline_;
 
     for (int i = 0; i < 40; i++) {
@@ -117,15 +156,40 @@ void PPU::render_sprites() {
         int screen_y = current_sprite.y - 16;
         int screen_x = current_sprite.x - 8;
 
-        if (y >= screen_y && y < screen_y + 8) {
+        if (y >= screen_y && y < screen_y + sprite_height) {
             int row = y - screen_y;
+            bool y_flip = current_sprite.flags & 0x40;
+            int effective_row = y_flip ? (sprite_height - 1 - row) : row;
 
-            uint16_t tile_address = 0x8000 + (current_sprite.tile * 16) + (row * 2);
+            uint8_t tile_index;
+            int row_within_tile;
+            if (tall_sprites) {
+                uint8_t base_tile = current_sprite.tile & 0xFE;
+                if (effective_row < 8) {
+                    tile_index = base_tile;
+                    row_within_tile = effective_row;
+                } else {
+                    tile_index = base_tile + 1;
+                    row_within_tile = effective_row - 8;
+                }
+            } else {
+                tile_index = current_sprite.tile;
+                row_within_tile = effective_row;
+            }
+
+            uint16_t tile_address = 0x8000 + (tile_index * 16) + (row_within_tile * 2);
             uint8_t low_byte  = bus_.read8(tile_address);
             uint8_t high_byte = bus_.read8(tile_address + 1);
 
+            // Bit 4 of the sprite's flags picks which palette: 0 = OBP0, 1 = OBP1
+            uint16_t palette_address = (current_sprite.flags & 0x10) ? 0xFF49 : 0xFF48;
+            uint8_t obp = bus_.read8(palette_address);
+            bool x_flip = current_sprite.flags & 0x20;
+
             for (int col = 0; col < 8; col++) {
-                uint8_t colour = decode_pixel(low_byte, high_byte, col);
+                // Accounts for if the flag for the sprite says to flip the sprite or not.
+                int effective_col = x_flip ? (7 - col) : col;
+                uint8_t colour = decode_pixel(low_byte, high_byte, effective_col);
 
                 // Skip if colour is 0 (transparent)
                 if (colour == 0) {
@@ -138,7 +202,8 @@ void PPU::render_sprites() {
                     continue;
                 }
 
-                frame_[y * 160 + pixel_x] = colour;
+                uint8_t shade = (obp >> (colour * 2)) & 0x03;
+                frame_[y * 160 + pixel_x] = shade;
             }
         }
     }
