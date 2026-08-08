@@ -66,8 +66,7 @@ uint8_t Bus::read8(uint16_t address) const {
     }
 
     if ((address >= 0xA000) && (address <= 0xBFFF)) {
-        // This is for MBC later so just returning a placeholder value for now.
-        return 0xFF;
+        return cartridge_.read_ram(address);
     }
 
     if ((address >= 0xC000) && (address <= 0xDFFF)) {
@@ -111,7 +110,7 @@ void Bus::write8(uint16_t address, uint8_t value) {
     }
 
     if ((address >= 0xA000) && (address <= 0xBFFF)) {
-        // Used for MBC, ignore until later.
+        cartridge_.write_ram(address, value);
     }
 
     if ((address >= 0xC000) && (address <= 0xDFFF)) {

@@ -12,6 +12,9 @@ class Cartridge {
         uint8_t read(uint16_t address) const;
         void write(uint16_t address, uint8_t value);
 
+        uint8_t read_ram(uint16_t address) const;
+        void write_ram(uint16_t address, uint8_t value);
+
         const std::string& title() const { return title_; }
         uint8_t cartridge_type() const { return cartridge_type_; }
         uint8_t rom_size_code() const { return rom_size_code_; }
@@ -19,6 +22,8 @@ class Cartridge {
 
     private:
         std::unique_ptr<MBC> mbc_;
+
+        int ram_byte_size() const;
 
         // Header info
         std::string title_;
