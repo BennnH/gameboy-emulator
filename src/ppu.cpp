@@ -147,8 +147,8 @@ void PPU::render_scanline() {
 void PPU::render_window() {
     uint8_t LCDC_reg = bus_.read8(0xFF40);
 
-    // Bit 5 = window enable.
-    if (!(LCDC_reg & 0x20)) {
+    // Bit 5 = window enable. Bit 0 = disable both bg + window.
+    if (!(LCDC_reg & 0x20) || !(LCDC_reg & 0x01)) {
         return;
     }
 

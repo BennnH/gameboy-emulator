@@ -101,8 +101,8 @@ uint8_t Bus::read8(uint16_t address) const {
 
 
 void Bus::write8(uint16_t address, uint8_t value) {
-    // For now roms are read only, and we don't write to cartridges so ignore.
     if (address <= 0x7FFF) {
+        cartridge_.write(address, value);
         return;
     }
 

@@ -16,6 +16,7 @@ add_executable(gameboy
     src/ppu.cpp
     src/display.cpp
     src/cartridges/cartridge.cpp
+    src/cartridges/no_mbc.cpp
 )
 
 target_include_directories(gameboy PRIVATE src)
