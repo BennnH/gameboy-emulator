@@ -17,6 +17,16 @@ enum CartridgeType : uint8_t {
 
 
 bool Cartridge::load(const std::string& filename) {
+    // Derive the save file path: same name as the ROM but with a .sav extension.
+    save_path_ = filename;
+    size_t dot = save_path_.find_last_of('.');
+    if (dot != std::string::npos) {
+        save_path_ = save_path_.substr(0, dot) + ".sav";
+    } else {
+        save_path_ += ".sav";
+    }
+
+
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open ROM: " + filename);
@@ -61,6 +71,7 @@ bool Cartridge::load(const std::string& filename) {
             mbc_ = std::make_unique<NoMBC>(std::move(rom));
             break;
     }
+    read_save();
     return true;
 }
 
@@ -93,5 +104,57 @@ int Cartridge::ram_byte_size() const {
         case 0x04: return 128 * 1024;  // 128 KiB
         case 0x05: return 64 * 1024;   // 64 KiB
         default:   return 0;
+    }
+}
+
+
+void Cartridge::write_save() const {
+    // Only cartridges with battery-backed RAM persist a save.
+    if (!has_battery()) {
+        return;
+    }
+
+    const std::vector<uint8_t>& ram = mbc_->get_ram();
+    if (ram.empty()) {
+        return;
+    }
+
+    std::ofstream file(save_path_, std::ios::binary);
+    if (!file.is_open()) {
+        return;
+    }
+    file.write(reinterpret_cast<const char*>(ram.data()), ram.size());
+}
+
+
+void Cartridge::read_save() {
+    if (!has_battery()) {
+        return;
+    }
+
+    std::ifstream file(save_path_, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        // No save file yet, this is a fresh cartridge.
+        return;
+    }
+
+    std::streamsize size = file.tellg();
+    std::vector<uint8_t> data(size);
+    file.seekg(0, std::ios::beg);
+    file.read(reinterpret_cast<char*>(data.data()), size);
+
+    mbc_->load_ram(data);
+}
+
+
+bool Cartridge::has_battery() const {
+    // Need to populate with other cart type consts once they are implemented.
+
+    switch (cartridge_type_) {
+        case CART_MBC5_RAM_BATTERY:
+        case CART_MBC5_RUMBLE_RAM_BATTERY:
+            return true;
+        default:
+            return false;
     }
 }

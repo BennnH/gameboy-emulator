@@ -14,6 +14,9 @@ class MBC5 : public MBC {
         uint8_t read_ram(uint16_t address) const override;
         void write_ram(uint16_t address, uint8_t value) override;
 
+        const std::vector<uint8_t>& get_ram() const override;
+        void load_ram(const std::vector<uint8_t>& data) override;
+
     private:
         std::vector<uint8_t> rom_;
         std::vector<uint8_t> ram_;

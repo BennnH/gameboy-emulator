@@ -57,3 +57,15 @@ void MBC5::write_ram(uint16_t address, uint8_t value) {
     uint32_t offset = (ram_bank_ * 0x2000) + (address - 0xA000);
     ram_[offset] = value;
 }
+
+
+const std::vector<uint8_t>& MBC5::get_ram() const {
+    return ram_;
+}
+
+
+void MBC5::load_ram(const std::vector<uint8_t>& data) {
+    if (data.size() == ram_.size()) {
+        ram_ = data;
+    }
+}

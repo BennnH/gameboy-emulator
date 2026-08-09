@@ -68,5 +68,6 @@ int main(int argc, char* argv[]) {
             SDL_Delay(ms_per_frame - frame_duration);
         }
     }
+    gb.write_save();
     return 0;
 }
