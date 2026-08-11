@@ -18,6 +18,7 @@ add_executable(gameboy
     src/cartridges/cartridge.cpp
     src/cartridges/no_mbc.cpp
     src/cartridges/mbc1.cpp
+    src/cartridges/mbc3.cpp
     src/cartridges/mbc5.cpp
 )
 

@@ -1,6 +1,7 @@
 #include "cartridge.h"
 #include "no_mbc.h"
 #include "mbc1.h"
+#include "mbc3.h"
 #include "mbc5.h"
 #include <fstream>
 
@@ -11,6 +12,11 @@ enum CartridgeType : uint8_t {
     CART_MBC1 = 0x01,
     CART_MBC1_RAM = 0x02,
     CART_MBC1_RAM_BATTERY = 0x03,
+    CART_MBC3_TIMER_BATTERY = 0x0F,
+    CART_MBC3_TIMER_RAM_BATTERY = 0x10,
+    CART_MBC3 = 0x11,
+    CART_MBC3_RAM = 0x12,
+    CART_MBC3_RAM_BATTERY = 0x13,
     CART_MBC5 = 0x19,
     CART_MBC5_RAM = 0x1A,
     CART_MBC5_RAM_BATTERY = 0x1B,
@@ -67,6 +73,13 @@ bool Cartridge::load(const std::string& filename) {
             mbc_ = std::make_unique<MBC1>(std::move(rom), ram_byte_size());
             break;
 
+        case CART_MBC3_TIMER_BATTERY:
+        case CART_MBC3_TIMER_RAM_BATTERY:
+        case CART_MBC3:
+        case CART_MBC3_RAM:
+        case CART_MBC3_RAM_BATTERY:
+            mbc_ = std::make_unique<MBC3>(std::move(rom), ram_byte_size());
+            break;
 
         case CART_MBC5:
         case CART_MBC5_RAM:
@@ -110,6 +123,7 @@ void Cartridge::write_ram(uint16_t address, uint8_t value) {
 int Cartridge::ram_byte_size() const {
     switch (ram_size_code_) {
         case 0x00: return 0;
+        case 0x01: return 2 * 1024;    // 2 KiB
         case 0x02: return 8 * 1024;    // 8 KiB
         case 0x03: return 32 * 1024;   // 32 KiB
         case 0x04: return 128 * 1024;  // 128 KiB
@@ -165,6 +179,9 @@ bool Cartridge::has_battery() const {
         case CART_MBC5_RAM_BATTERY:
         case CART_MBC5_RUMBLE_RAM_BATTERY:
         case CART_MBC1_RAM_BATTERY:
+        case CART_MBC3_RAM_BATTERY:
+        case CART_MBC3_TIMER_BATTERY:
+        case CART_MBC3_TIMER_RAM_BATTERY:
             return true;
         default:
             return false;
