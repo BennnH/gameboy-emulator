@@ -1,6 +1,7 @@
 #include "cartridge.h"
 #include "no_mbc.h"
 #include "mbc1.h"
+#include "mbc2.h"
 #include "mbc3.h"
 #include "mbc5.h"
 #include <fstream>
@@ -12,6 +13,8 @@ enum CartridgeType : uint8_t {
     CART_MBC1 = 0x01,
     CART_MBC1_RAM = 0x02,
     CART_MBC1_RAM_BATTERY = 0x03,
+    CART_MBC2 = 0x05,
+    CART_MBC2_BATTERY = 0x06,
     CART_MBC3_TIMER_BATTERY = 0x0F,
     CART_MBC3_TIMER_RAM_BATTERY = 0x10,
     CART_MBC3 = 0x11,
@@ -71,6 +74,11 @@ bool Cartridge::load(const std::string& filename) {
         case CART_MBC1_RAM:
         case CART_MBC1_RAM_BATTERY:
             mbc_ = std::make_unique<MBC1>(std::move(rom), ram_byte_size());
+            break;
+
+        case CART_MBC2:
+        case CART_MBC2_BATTERY:
+            mbc_ = std::make_unique<MBC2>(std::move(rom), ram_byte_size());
             break;
 
         case CART_MBC3_TIMER_BATTERY:
@@ -173,15 +181,16 @@ void Cartridge::read_save() {
 
 
 bool Cartridge::has_battery() const {
-    // Need to populate with other cart type consts once they are implemented.
+    // These are cartridges that have internal batteries so the RAM data can persist between sessions.
 
     switch (cartridge_type_) {
-        case CART_MBC5_RAM_BATTERY:
-        case CART_MBC5_RUMBLE_RAM_BATTERY:
         case CART_MBC1_RAM_BATTERY:
+        case CART_MBC2_BATTERY:
         case CART_MBC3_RAM_BATTERY:
         case CART_MBC3_TIMER_BATTERY:
         case CART_MBC3_TIMER_RAM_BATTERY:
+        case CART_MBC5_RAM_BATTERY:
+        case CART_MBC5_RUMBLE_RAM_BATTERY:
             return true;
         default:
             return false;
