@@ -1,5 +1,6 @@
 #include "cartridge.h"
 #include "no_mbc.h"
+#include "mbc1.h"
 #include "mbc5.h"
 #include <fstream>
 
@@ -7,6 +8,9 @@
 // Cartridge type byte (0x0147) values
 enum CartridgeType : uint8_t {
     CART_ROM_ONLY = 0x00,
+    CART_MBC1 = 0x01,
+    CART_MBC1_RAM = 0x02,
+    CART_MBC1_RAM_BATTERY = 0x03,
     CART_MBC5 = 0x19,
     CART_MBC5_RAM = 0x1A,
     CART_MBC5_RAM_BATTERY = 0x1B,
@@ -56,6 +60,13 @@ bool Cartridge::load(const std::string& filename) {
         case CART_ROM_ONLY:
             mbc_ = std::make_unique<NoMBC>(std::move(rom));
             break;
+
+        case CART_MBC1:
+        case CART_MBC1_RAM:
+        case CART_MBC1_RAM_BATTERY:
+            mbc_ = std::make_unique<MBC1>(std::move(rom), ram_byte_size());
+            break;
+
 
         case CART_MBC5:
         case CART_MBC5_RAM:
@@ -153,6 +164,7 @@ bool Cartridge::has_battery() const {
     switch (cartridge_type_) {
         case CART_MBC5_RAM_BATTERY:
         case CART_MBC5_RUMBLE_RAM_BATTERY:
+        case CART_MBC1_RAM_BATTERY:
             return true;
         default:
             return false;
