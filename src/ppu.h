@@ -31,6 +31,7 @@ class PPU {
         uint8_t current_scanline_{};
         int current_window_line_{};
         int current_cycles_{};
+        bool stat_line_{false};
 
         uint8_t decode_pixel(uint8_t low_byte, uint8_t high_byte, int x) const;
         void render_scanline();

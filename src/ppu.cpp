@@ -66,12 +66,26 @@ void PPU::tick(int cycles) {
     stat_reg = (stat_reg & 0xFC) | mode;
 
     uint8_t lyc = bus_.read8(0xFF45);
-    if (current_scanline_ == lyc) {
+    bool coincidence = (current_scanline_ == lyc);
+    if (coincidence) {
         stat_reg |= 0x04;
     } else {
         stat_reg &= ~0x04;
     }
     bus_.write8(0xFF41, stat_reg);
+
+    bool stat_interrupt =
+        (coincidence && (stat_reg & 0x40)) ||  // bit 6: LYC=LY
+        (mode == 2 && (stat_reg & 0x20)) ||  // bit 5: OAM scan
+        (mode == 1 && (stat_reg & 0x10)) ||  // bit 4: VBlank
+        (mode == 0 && (stat_reg & 0x08));    // bit 3: HBlank
+
+    if (stat_interrupt && !stat_line_) {
+        uint8_t if_register = bus_.read8(0xFF0F);
+        if_register |= 0x02;   // set STAT interrupt flag (bit 1)
+        bus_.write8(0xFF0F, if_register);
+    }
+    stat_line_ = stat_interrupt;
 }
 
 
