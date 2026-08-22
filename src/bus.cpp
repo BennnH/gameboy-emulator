@@ -14,30 +14,59 @@ void Bus::reset() {
 }
 
 
+// Works out the low nibble of the joypad register (0xFF00). A bit reads 0 when
+// its button is pressed and that button's group is selected, and 1 otherwise.
+uint8_t Bus::joypad_bits() const {
+    uint8_t selection = io_[0];
+    bool select_dir = !(selection & 0x10);
+    bool select_act = !(selection & 0x20);
+
+    uint8_t dir_nibble = (~button_state_) & 0x0F;
+    uint8_t act_nibble = (~(button_state_ >> 4)) & 0x0F;
+
+    uint8_t bits = 0x0F;
+    if (select_dir) bits &= dir_nibble;
+    if (select_act) bits &= act_nibble;
+
+    return bits;
+}
+
+
+// The joypad interrupt fires on a high-to-low transition of any of the four low
+// bits, i.e. when a button becomes pressed while its group is selected.
+// Triggered on hardware, so we edge detect against the previous value.
+void Bus::update_joypad_interrupt() {
+    uint8_t bits = joypad_bits();
+
+    // Bits that were 1 before and are 0 now.
+    if (prev_joypad_bits_ & ~bits & 0x0F) {
+        io_[0xFF0F - 0xFF00] |= 0x10;
+    }
+
+    prev_joypad_bits_ = bits;
+}
+
+
 uint8_t Bus::read_io(uint16_t address) const {
     // Interupt flag register. Top 3 bits aren't used and always have value '1'
     if (address == 0xFF0F) {
         return io_[address - 0xFF00] | 0xE0;
     }
     if (address == 0xFF00) {
-        uint8_t selection = io_[0];
-        bool select_dir = !(selection & 0x10);
-        bool select_act = !(selection & 0x20);
-
-        uint8_t dir_nibble = (~button_state_) & 0x0F;
-        uint8_t act_nibble = (~(button_state_ >> 4)) & 0x0F;
-
-        uint8_t bits = 0x0F;
-        if (select_dir) bits &= dir_nibble;
-        if (select_act) bits &= act_nibble;
-
-        return 0xC0 | (selection & 0x30) | bits;
+        return 0xC0 | (io_[0] & 0x30) | joypad_bits();
     }
     return io_[address - 0xFF00];
 }
 
 
 void Bus::write_io(uint16_t address, uint8_t value) {
+    // Check if we have a joypad interrupt here.
+    if (address == 0xFF00) {
+        io_[0] = (io_[0] & 0xCF) | (value & 0x30);
+        update_joypad_interrupt();
+        return;
+    }
+
     // Serial data transfer, outputs the byte when a transfer is requested so we can debug through terminal output.
     if (address == 0xFF02 && value == 0x81) {
         std::printf("%c", io_[0xFF01 - 0xFF00]);
@@ -204,4 +233,5 @@ void Bus::set_button_state(uint8_t button_mask, bool pressed) {
     } else {
         button_state_ &= ~button_mask;
     }
+    update_joypad_interrupt();
 }

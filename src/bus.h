@@ -46,5 +46,10 @@ class Bus {
         int tima_counter_{};
 
         uint8_t button_state_{0x00};
+        // Last computed low nibble of P1, for edge-detecting the joypad interrupt.
+        uint8_t prev_joypad_bits_{0x0F};
+
+        uint8_t joypad_bits() const;
+        void update_joypad_interrupt();
 
 };
