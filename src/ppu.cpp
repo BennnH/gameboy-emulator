@@ -19,7 +19,7 @@ void PPU::tick(int cycles) {
             current_window_line_ = 0;
             bus_.write8(0xFF44, 0);
             uint8_t stat_reg = bus_.read8(0xFF41);
-            bus_.write8(0xFF41, stat_reg & 0xFC);
+            bus_.ppu_write_stat(stat_reg & 0xFC);
         }
         return;
     }
@@ -72,7 +72,7 @@ void PPU::tick(int cycles) {
     } else {
         stat_reg &= ~0x04;
     }
-    bus_.write8(0xFF41, stat_reg);
+    bus_.ppu_write_stat(stat_reg);
 
     bool stat_interrupt =
         (coincidence && (stat_reg & 0x40)) ||  // bit 6: LYC=LY

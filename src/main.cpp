@@ -42,12 +42,12 @@ int main(int argc, char* argv[]) {
 
     Display display(4);
 
-    const int ms_per_frame = 1000 / 60;
+    // The DMG runs at ~59.7275 FPS (4194304 cycles/sec / 70224 cycles/frame).
+    const double ms_per_frame = 1000.0 / 59.7275;
+    double next_frame_time = SDL_GetTicks();
 
     bool running = true;
     while (running) {
-        uint32_t frame_start = SDL_GetTicks();
-
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
@@ -63,9 +63,14 @@ int main(int argc, char* argv[]) {
         gb.run_frame();
         display.render(gb.ppu().get_frame());
 
-        uint32_t frame_duration = SDL_GetTicks() - frame_start;
-        if (frame_duration < ms_per_frame) {
-            SDL_Delay(ms_per_frame - frame_duration);
+        next_frame_time += ms_per_frame;
+        double current_ticks = SDL_GetTicks();
+        if (current_ticks < next_frame_time) {
+            SDL_Delay(static_cast<uint32_t>(next_frame_time - current_ticks));
+        } else {
+            // We're behind (e.g. the window was dragged, or a frame ran long),
+            // so resync rather than trying to catch up.
+            next_frame_time = current_ticks;
         }
     }
     gb.write_save();

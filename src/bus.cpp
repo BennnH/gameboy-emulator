@@ -67,6 +67,29 @@ void Bus::write_io(uint16_t address, uint8_t value) {
         return;
     }
 
+    // DIV register. Any write resets it to 0, and the internal counter with it.
+    if (address == 0xFF04) {
+        io_[0xFF04 - 0xFF00] = 0;
+        div_counter_ = 0;
+        return;
+    }
+
+    // STAT register. The low 3 bits are driven by the PPU and are read only,
+    // so a CPU write only touches the interrupt enable bits.
+    if (address == 0xFF41) {
+        io_[0xFF41 - 0xFF00] = (io_[0xFF41 - 0xFF00] & 0x07) | (value & 0x78);
+        return;
+    }
+
+    // TAC register. Clear the count if there is a frequency change.
+    if (address == 0xFF07) {
+        if ((io_[0xFF07 - 0xFF00] & 0x03) != (value & 0x03)) {
+            tima_counter_ = 0;
+        }
+        io_[0xFF07 - 0xFF00] = value;
+        return;
+    }
+
     // Serial data transfer, outputs the byte when a transfer is requested so we can debug through terminal output.
     if (address == 0xFF02 && value == 0x81) {
         std::printf("%c", io_[0xFF01 - 0xFF00]);
@@ -136,35 +159,43 @@ void Bus::write8(uint16_t address, uint8_t value) {
 
     if ((address >= 0x8000) && (address <= 0x9FFF)) {
         vram_[address - 0x8000] = value;
+        return;
     }
 
     if ((address >= 0xA000) && (address <= 0xBFFF)) {
         cartridge_.write_ram(address, value);
+        return;
     }
 
     if ((address >= 0xC000) && (address <= 0xDFFF)) {
         wram_[address - 0xC000] = value;
+        return;
     }
 
     if ((address >= 0xE000) && (address <= 0xFDFF)) {
         // This is a mirror of WRAM
         wram_[address - 0xE000] = value;
+        return;
     }
 
     if ((address >= 0xFE00) && (address <= 0xFE9F)) {
         oam_[address - 0xFE00] = value;
+        return;
     }
 
     if ((address >= 0xFEA0) && (address <= 0xFEFF)) {
         // Nintendo says use of this area is prohibited
+        return;
     }
 
     if ((address >= 0xFF00) && (address <= 0xFF7F)) {
         write_io(address, value);
+        return;
     }
 
     if ((address >= 0xFF80) && (address <= 0xFFFE)) {
         hram_[address - 0xFF80] = value;
+        return;
     }
 
     if (address == 0xFFFF) {
@@ -224,6 +255,12 @@ void Bus::perform_oam_dma(uint8_t value) {
     for (int i = 0; i < 160; i++) {
         write8(0xFE00 + i, read8(source + i));
     }
+}
+
+// The PPU owns the low 3 bits of STAT register (mode and LYC coincidence), which are read
+// only from the CPU's side. This is the PPU's own path, bypassing that mask.
+void Bus::ppu_write_stat(uint8_t value) {
+    io_[0xFF41 - 0xFF00] = value;
 }
 
 

@@ -16,12 +16,6 @@ int Gameboy::step() {
     return cycles;
 }
 
-void Gameboy::run(int max_steps) {
-    for (int i = 0; i < max_steps; i ++) {
-        step();
-    }
-}
-
 
 void Gameboy::run_frame() {
     int frame_cycles = 0;

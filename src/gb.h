@@ -15,7 +15,6 @@ class Gameboy {
         bool load_rom(const std::string& filename);
         void write_save() { cartridge_.write_save(); }
         int step();
-        void run(int max_steps);
         void run_frame();
 
 
