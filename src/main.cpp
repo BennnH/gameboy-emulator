@@ -42,6 +42,8 @@ int main(int argc, char* argv[]) {
 
     Display display(4);
 
+    bool turbo = false;
+
     // The DMG runs at ~59.7275 FPS (4194304 cycles/sec / 70224 cycles/frame).
     const double ms_per_frame = 1000.0 / 59.7275;
     double next_frame_time = SDL_GetTicks();
@@ -56,6 +58,8 @@ int main(int argc, char* argv[]) {
                 uint8_t btn = key_to_button(event.key.keysym.sym);
                 if (btn) {
                     gb.bus().set_button_state(btn, event.type == SDL_KEYDOWN);
+                } else if (event.key.keysym.sym == SDLK_SPACE) {
+                    turbo = event.type == SDL_KEYDOWN;
                 }
             }
         }
@@ -65,10 +69,11 @@ int main(int argc, char* argv[]) {
 
         next_frame_time += ms_per_frame;
         double current_ticks = SDL_GetTicks();
-        if (current_ticks < next_frame_time) {
+        if (current_ticks < next_frame_time && !turbo) {
             SDL_Delay(static_cast<uint32_t>(next_frame_time - current_ticks));
         } else {
             // We're behind (e.g. the window was dragged, or a frame ran long),
+            // (or TURBO was active)
             // so resync rather than trying to catch up.
             next_frame_time = current_ticks;
         }
