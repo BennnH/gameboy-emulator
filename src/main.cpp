@@ -1,5 +1,6 @@
 #include "gb.h"
 #include "display.h"
+#include "audio.h"
 #include <iostream>
 #include <SDL.h>
 
@@ -41,6 +42,7 @@ int main(int argc, char* argv[]) {
     }
 
     Display display(4);
+    Audio audio;
 
     // The DMG runs at ~59.7275 FPS (4194304 cycles/sec / 70224 cycles/frame).
     const double ms_per_frame = 1000.0 / 59.7275;
@@ -62,6 +64,7 @@ int main(int argc, char* argv[]) {
 
         gb.run_frame();
         display.render(gb.ppu().get_frame());
+        audio.queue_samples(gb.bus().apu().sample_buffer());
 
         next_frame_time += ms_per_frame;
         double current_ticks = SDL_GetTicks();

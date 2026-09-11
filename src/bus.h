@@ -1,5 +1,7 @@
 #pragma once
 
+#include "apu.h"
+
 #include <array>
 #include <cstdint>
 
@@ -23,8 +25,11 @@ class Bus {
         int get_tac_speed() const;
         void perform_oam_dma(uint8_t value);
         void ppu_write_stat(uint8_t value);
+
+        Apu& apu() { return apu_; }
     private:
         Cartridge& cartridge_;
+        Apu apu_;
         // Memory regions from pandocs memory map.
 
         // 0x8000-0x9FFF

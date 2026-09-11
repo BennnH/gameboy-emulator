@@ -15,6 +15,8 @@ add_executable(gameboy
     src/bus.cpp
     src/ppu.cpp
     src/display.cpp
+    src/apu.cpp
+    src/audio.cpp
     src/cartridges/cartridge.cpp
     src/cartridges/no_mbc.cpp
     src/cartridges/mbc1.cpp

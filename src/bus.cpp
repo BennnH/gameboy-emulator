@@ -9,6 +9,7 @@ Bus::Bus(Cartridge& cartridge) : cartridge_(cartridge) {
 
 
 void Bus::reset() {
+    apu_.reset();
     write_io(0xFF40, 0x91); // LCDC: LCD on, BG on, tile data 0x8000, tilemap 0x9800
     write_io(0xFF47, 0xFC); // BGP: standard post-boot background palette
 }
@@ -55,6 +56,10 @@ uint8_t Bus::read_io(uint16_t address) const {
     if (address == 0xFF00) {
         return 0xC0 | (io_[0] & 0x30) | joypad_bits();
     }
+    // Audio registers and wave RAM.
+    if ((address >= 0xFF10) && (address <= 0xFF3F)) {
+        return apu_.read_register(address);
+    }
     return io_[address - 0xFF00];
 }
 
@@ -87,6 +92,12 @@ void Bus::write_io(uint16_t address, uint8_t value) {
             tima_counter_ = 0;
         }
         io_[0xFF07 - 0xFF00] = value;
+        return;
+    }
+
+    // Audio registers and wave RAM.
+    if ((address >= 0xFF10) && (address <= 0xFF3F)) {
+        apu_.write_register(address, value);
         return;
     }
 
@@ -205,6 +216,7 @@ void Bus::write8(uint16_t address, uint8_t value) {
 
 
 void Bus::tick(int cycles) {
+    apu_.tick(cycles);
     cycles_ += cycles;
 
     // DIV, which is always running
