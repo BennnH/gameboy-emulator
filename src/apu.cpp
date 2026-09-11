@@ -40,6 +40,7 @@ void Apu::tick(int cycles) {
 
     // Each channel's own timer runs at T-cycle speed and produces the waveform.
     tick_pulse(ch1_, cycles);
+    tick_pulse(ch2_, cycles);
 
     // Downsample from the ~4MHz channel output to the 44.1kHz the sound card wants.
     sample_counter_ += cycles;
@@ -126,6 +127,34 @@ void Apu::write_register(uint16_t address, uint8_t value) {
             }
             break;
 
+        // NR21-NR24, channel 2. Identical to channel 1 without the sweep.
+        case 0xFF16:
+            ch2_.duty_pattern = (value >> 6) & 0x03;
+            ch2_.length_counter = 64 - (value & 0x3F);
+            break;
+
+        case 0xFF17:
+            ch2_.envelope_initial_volume = (value >> 4) & 0x0F;
+            ch2_.envelope_increasing = (value & 0x08) != 0;
+            ch2_.envelope_period = value & 0x07;
+            ch2_.dac_enabled = (value & 0xF8) != 0;
+            if (!ch2_.dac_enabled) {
+                ch2_.enabled = false;
+            }
+            break;
+
+        case 0xFF18:
+            ch2_.frequency = (ch2_.frequency & 0x0700) | value;
+            break;
+
+        case 0xFF19:
+            ch2_.frequency = (ch2_.frequency & 0x00FF) | ((value & 0x07) << 8);
+            ch2_.length_enabled = (value & 0x40) != 0;
+            if (value & 0x80) {
+                trigger_pulse(ch2_, false);
+            }
+            break;
+
         default:
             break;
     }
@@ -154,14 +183,19 @@ int Apu::pulse_output(const PulseChannel& channel) const {
 // in NR51 and the master volume in NR50.
 void Apu::generate_sample() {
     int ch1 = pulse_output(ch1_);
+    int ch2 = pulse_output(ch2_);
 
     uint8_t nr51 = registers_[0xFF25 - 0xFF10];
     uint8_t nr50 = registers_[0xFF24 - 0xFF10];
 
     // The low nibble of NR51 routes channels to the right, the high nibble
     // to the left.
-    int left = (nr51 & 0x10) ? ch1 : 0;
-    int right = (nr51 & 0x01) ? ch1 : 0;
+    int left = 0;
+    int right = 0;
+    if (nr51 & 0x10) left += ch1;
+    if (nr51 & 0x20) left += ch2;
+    if (nr51 & 0x01) right += ch1;
+    if (nr51 & 0x02) right += ch2;
 
     int left_volume = (nr50 >> 4) & 0x07;
     int right_volume = nr50 & 0x07;
