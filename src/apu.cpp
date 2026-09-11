@@ -65,13 +65,14 @@ void Apu::step_frame_sequencer() {
         // Length counters are clocked on every even step, giving 256Hz.
         case 0:
         case 4:
-            // TODO: clock length counters.
+            clock_lengths();
             break;
 
         // Steps 2 and 6 clock length as above, and also the sweep at 128Hz.
         case 2:
         case 6:
-            // TODO: clock length counters and channel 1's sweep.
+            clock_lengths();
+            // TODO: clock channel 1's sweep.
             break;
 
         // The envelope is clocked once per full cycle, giving 64Hz.
@@ -114,6 +115,28 @@ void Apu::clock_envelopes() {
     clock_envelope(ch1_.envelope);
     clock_envelope(ch2_.envelope);
     clock_envelope(ch4_.envelope);
+}
+
+
+// Clocked at 256Hz. Only ever switches a channel off if the game opted in with
+// the length enable bit, which a lot of games leave clear.
+void Apu::clock_length(bool& enabled, int& length_counter, bool length_enabled) {
+    if (!length_enabled || length_counter == 0) {
+        return;
+    }
+
+    length_counter--;
+    if (length_counter == 0) {
+        enabled = false;
+    }
+}
+
+
+void Apu::clock_lengths() {
+    clock_length(ch1_.enabled, ch1_.length_counter, ch1_.length_enabled);
+    clock_length(ch2_.enabled, ch2_.length_counter, ch2_.length_enabled);
+    clock_length(ch3_.enabled, ch3_.length_counter, ch3_.length_enabled);
+    clock_length(ch4_.enabled, ch4_.length_counter, ch4_.length_enabled);
 }
 
 

@@ -148,4 +148,7 @@ class Apu {
 
         void clock_envelope(Envelope& envelope);
         void clock_envelopes();
+
+        void clock_length(bool& enabled, int& length_counter, bool length_enabled);
+        void clock_lengths();
 };
