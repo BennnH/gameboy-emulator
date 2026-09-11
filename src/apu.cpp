@@ -41,6 +41,7 @@ void Apu::tick(int cycles) {
     // Each channel's own timer runs at T-cycle speed and produces the waveform.
     tick_pulse(ch1_, cycles);
     tick_pulse(ch2_, cycles);
+    tick_wave(cycles);
 
     // Downsample from the ~4MHz channel output to the 44.1kHz the sound card wants.
     sample_counter_ += cycles;
@@ -80,11 +81,21 @@ void Apu::step_frame_sequencer() {
 
 
 uint8_t Apu::read_register(uint16_t address) const {
+    if (address >= 0xFF30) {
+        return wave_ram_[address - 0xFF30];
+    }
+
     return registers_[address - 0xFF10];
 }
 
 
 void Apu::write_register(uint16_t address, uint8_t value) {
+    // Wave RAM, which the game fills with the waveform shape it wants.
+    if (address >= 0xFF30) {
+        wave_ram_[address - 0xFF30] = value;
+        return;
+    }
+
     // NR52. Bit 7 is the master enable, but bits 0-3 are channel status driven
     // by the hardware and are read only, so a CPU write only touches bit 7.
     if (address == 0xFF26) {
@@ -155,6 +166,41 @@ void Apu::write_register(uint16_t address, uint8_t value) {
             }
             break;
 
+        // NR30, the wave channel's DAC is a single bit rather than a volume.
+        case 0xFF1A:
+            ch3_.dac_enabled = (value & 0x80) != 0;
+            if (!ch3_.dac_enabled) {
+                ch3_.enabled = false;
+            }
+            break;
+
+        // NR31, length. The wave channel gets a full byte, so 256 steps.
+        case 0xFF1B:
+            ch3_.length_counter = 256 - value;
+            break;
+
+        // NR32, volume as a right shift. 0 mutes, then 100%, 50% and 25%.
+        case 0xFF1C:
+            switch ((value >> 5) & 0x03) {
+                case 0: ch3_.volume_shift = 4; break;
+                case 1: ch3_.volume_shift = 0; break;
+                case 2: ch3_.volume_shift = 1; break;
+                default: ch3_.volume_shift = 2; break;
+            }
+            break;
+
+        case 0xFF1D:
+            ch3_.frequency = (ch3_.frequency & 0x0700) | value;
+            break;
+
+        case 0xFF1E:
+            ch3_.frequency = (ch3_.frequency & 0x00FF) | ((value & 0x07) << 8);
+            ch3_.length_enabled = (value & 0x40) != 0;
+            if (value & 0x80) {
+                trigger_wave();
+            }
+            break;
+
         default:
             break;
     }
@@ -184,6 +230,7 @@ int Apu::pulse_output(const PulseChannel& channel) const {
 void Apu::generate_sample() {
     int ch1 = pulse_output(ch1_);
     int ch2 = pulse_output(ch2_);
+    int ch3 = wave_output();
 
     uint8_t nr51 = registers_[0xFF25 - 0xFF10];
     uint8_t nr50 = registers_[0xFF24 - 0xFF10];
@@ -194,8 +241,10 @@ void Apu::generate_sample() {
     int right = 0;
     if (nr51 & 0x10) left += ch1;
     if (nr51 & 0x20) left += ch2;
+    if (nr51 & 0x40) left += ch3;
     if (nr51 & 0x01) right += ch1;
     if (nr51 & 0x02) right += ch2;
+    if (nr51 & 0x04) right += ch3;
 
     int left_volume = (nr50 >> 4) & 0x07;
     int right_volume = nr50 & 0x07;
@@ -223,4 +272,37 @@ void Apu::trigger_pulse(PulseChannel& channel, bool is_channel_1) {
 
     // Sweep is channel 1 only, and gets set up in a later step. Delete once implemented!!
     (void)is_channel_1;
+}
+
+
+void Apu::tick_wave(int cycles) {
+    ch3_.frequency_timer -= cycles;
+    while (ch3_.frequency_timer <= 0) {
+        // The wave channel steps twice as fast as a pulse channel, because it
+        // has 32 samples to get through instead of 8 duty steps.
+        ch3_.frequency_timer += (2048 - ch3_.frequency) * 2;
+        ch3_.position = (ch3_.position + 1) & 0x1F;
+    }
+}
+
+
+int Apu::wave_output() const {
+    if (!ch3_.enabled || !ch3_.dac_enabled || ch3_.volume_shift > 3) {
+        return 0;
+    }
+
+    // Two samples per byte, high nibble first.
+    uint8_t packed = wave_ram_[ch3_.position / 2];
+    int sample = (ch3_.position & 1) ? (packed & 0x0F) : (packed >> 4);
+    return sample >> ch3_.volume_shift;
+}
+
+
+void Apu::trigger_wave() {
+    ch3_.enabled = ch3_.dac_enabled;
+    if (ch3_.length_counter == 0) {
+        ch3_.length_counter = 256;
+    }
+    ch3_.frequency_timer = (2048 - ch3_.frequency) * 2;
+    ch3_.position = 0;
 }

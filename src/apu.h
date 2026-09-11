@@ -48,6 +48,26 @@ struct PulseChannel {
 };
 
 
+// Plays 32 four bit samples held in wave RAM, so unlike the pulse channels the
+// waveform shape is whatever the game puts there.
+struct WaveChannel {
+    bool enabled{false};
+    bool dac_enabled{false};
+
+    int frequency{0};
+    int frequency_timer{0};
+    // Which of the 32 samples we're currently on.
+    int position{0};
+
+    // Volume is a right shift rather than a multiplier. 0 is full volume, 1 is
+    // half, 2 is a quarter, and 4 is our marker for muted.
+    int volume_shift{4};
+
+    int length_counter{0};
+    bool length_enabled{false};
+};
+
+
 class Apu {
     public:
         void reset();
@@ -76,4 +96,13 @@ class Apu {
         int pulse_output(const PulseChannel& channel) const;
         void trigger_pulse(PulseChannel& channel, bool is_channel_1);
         void generate_sample();
+
+        WaveChannel ch3_{};
+
+        // Wave RAM at 0xFF30-0xFF3F, holding 32 samples packed two per byte.
+        std::array<uint8_t, 16> wave_ram_{};
+
+        void tick_wave(int cycles);
+        int wave_output() const;
+        void trigger_wave();
 };
