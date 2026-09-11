@@ -19,6 +19,11 @@ constexpr uint8_t DUTY_TABLE[4][8] = {
     {0, 1, 1, 1, 1, 1, 1, 0},  // 75%
 };
 
+// Base divisors for the noise channel's frequency timer, selected by the low
+// 3 bits of NR43.
+constexpr int NOISE_DIVISORS[8] = {8, 16, 32, 48, 64, 80, 96, 112};
+
+
 void Apu::reset() {
     registers_.fill(0);
     sequencer_counter_ = 0;
@@ -42,6 +47,7 @@ void Apu::tick(int cycles) {
     tick_pulse(ch1_, cycles);
     tick_pulse(ch2_, cycles);
     tick_wave(cycles);
+    tick_noise(cycles);
 
     // Downsample from the ~4MHz channel output to the 44.1kHz the sound card wants.
     sample_counter_ += cycles;
@@ -201,6 +207,35 @@ void Apu::write_register(uint16_t address, uint8_t value) {
             }
             break;
 
+        // NR41, length only, the noise channel has no duty pattern.
+        case 0xFF20:
+            ch4_.length_counter = 64 - (value & 0x3F);
+            break;
+
+        case 0xFF21:
+            ch4_.envelope_initial_volume = (value >> 4) & 0x0F;
+            ch4_.envelope_increasing = (value & 0x08) != 0;
+            ch4_.envelope_period = value & 0x07;
+            ch4_.dac_enabled = (value & 0xF8) != 0;
+            if (!ch4_.dac_enabled) {
+                ch4_.enabled = false;
+            }
+            break;
+
+        // NR43. The noise channel has no frequency, just a clock divisor.
+        case 0xFF22:
+            ch4_.clock_shift = (value >> 4) & 0x0F;
+            ch4_.width_mode = (value & 0x08) != 0;
+            ch4_.divisor_code = value & 0x07;
+            break;
+
+        case 0xFF23:
+            ch4_.length_enabled = (value & 0x40) != 0;
+            if (value & 0x80) {
+                trigger_noise();
+            }
+            break;
+
         default:
             break;
     }
@@ -231,6 +266,7 @@ void Apu::generate_sample() {
     int ch1 = pulse_output(ch1_);
     int ch2 = pulse_output(ch2_);
     int ch3 = wave_output();
+    int ch4 = noise_output();
 
     uint8_t nr51 = registers_[0xFF25 - 0xFF10];
     uint8_t nr50 = registers_[0xFF24 - 0xFF10];
@@ -242,9 +278,11 @@ void Apu::generate_sample() {
     if (nr51 & 0x10) left += ch1;
     if (nr51 & 0x20) left += ch2;
     if (nr51 & 0x40) left += ch3;
+    if (nr51 & 0x80) left += ch4;
     if (nr51 & 0x01) right += ch1;
     if (nr51 & 0x02) right += ch2;
     if (nr51 & 0x04) right += ch3;
+    if (nr51 & 0x08) right += ch4;
 
     int left_volume = (nr50 >> 4) & 0x07;
     int right_volume = nr50 & 0x07;
@@ -305,4 +343,46 @@ void Apu::trigger_wave() {
     }
     ch3_.frequency_timer = (2048 - ch3_.frequency) * 2;
     ch3_.position = 0;
+}
+
+
+void Apu::tick_noise(int cycles) {
+    ch4_.frequency_timer -= cycles;
+    while (ch4_.frequency_timer <= 0) {
+        ch4_.frequency_timer += NOISE_DIVISORS[ch4_.divisor_code] << ch4_.clock_shift;
+
+        // XOR the bottom two bits and feed the result back into the top.
+        int feedback = (ch4_.lfsr & 1) ^ ((ch4_.lfsr >> 1) & 1);
+        ch4_.lfsr >>= 1;
+        ch4_.lfsr |= static_cast<uint16_t>(feedback << 14);
+
+        // Width mode also feeds bit 6, which shortens the repeat period from
+        // 32767 steps to 127 and makes the noise sound pitched.
+        if (ch4_.width_mode) {
+            ch4_.lfsr &= ~(1 << 6);
+            ch4_.lfsr |= static_cast<uint16_t>(feedback << 6);
+        }
+    }
+}
+
+
+int Apu::noise_output() const {
+    if (!ch4_.enabled || !ch4_.dac_enabled) {
+        return 0;
+    }
+    // The output is bit 0 inverted.
+    return (~ch4_.lfsr & 1) ? ch4_.volume : 0;
+}
+
+
+void Apu::trigger_noise() {
+    ch4_.enabled = ch4_.dac_enabled;
+    if (ch4_.length_counter == 0) {
+        ch4_.length_counter = 64;
+    }
+    ch4_.frequency_timer = NOISE_DIVISORS[ch4_.divisor_code] << ch4_.clock_shift;
+    ch4_.volume = ch4_.envelope_initial_volume;
+    ch4_.envelope_counter = ch4_.envelope_period;
+    // All bits set, so the sequence starts from the same place every time.
+    ch4_.lfsr = 0x7FFF;
 }

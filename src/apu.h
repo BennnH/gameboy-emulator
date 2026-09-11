@@ -68,6 +68,31 @@ struct WaveChannel {
 };
 
 
+// Pseudo random noise from a shift register, used for percussion and effects.
+struct NoiseChannel {
+    bool enabled{false};
+    bool dac_enabled{false};
+
+    // 15 bit linear feedback shift register. Feeding the result back into bit 6
+    // as well shortens the period and makes it sound much more tonal.
+    uint16_t lfsr{0x7FFF};
+    bool width_mode{false};
+
+    int frequency_timer{0};
+    int clock_shift{0};
+    int divisor_code{0};
+
+    int volume{0};
+    int envelope_initial_volume{0};
+    bool envelope_increasing{false};
+    int envelope_period{0};
+    int envelope_counter{0};
+
+    int length_counter{0};
+    bool length_enabled{false};
+};
+
+
 class Apu {
     public:
         void reset();
@@ -105,4 +130,11 @@ class Apu {
         void tick_wave(int cycles);
         int wave_output() const;
         void trigger_wave();
+
+
+        NoiseChannel ch4_{};
+
+        void tick_noise(int cycles);
+        int noise_output() const;
+        void trigger_noise();
 };
