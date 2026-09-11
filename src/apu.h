@@ -151,4 +151,7 @@ class Apu {
 
         void clock_length(bool& enabled, int& length_counter, bool length_enabled);
         void clock_lengths();
+
+        int calculate_sweep_frequency();
+        void clock_sweep();
 };

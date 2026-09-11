@@ -72,7 +72,7 @@ void Apu::step_frame_sequencer() {
         case 2:
         case 6:
             clock_lengths();
-            // TODO: clock channel 1's sweep.
+            clock_sweep();
             break;
 
         // The envelope is clocked once per full cycle, giving 64Hz.
@@ -140,6 +140,59 @@ void Apu::clock_lengths() {
 }
 
 
+// Works out where the sweep would move channel 1's frequency to next. Going
+// past the 11 bit range switches the channel off, which is how hardware stops
+// a rising sweep running away.
+int Apu::calculate_sweep_frequency() {
+    // The shift decides how big a step to take, as a fraction of the current
+    // frequency. A shift of 1 moves by half, 2 by a quarter, and so on.
+    int change = ch1_.sweep_shadow >> ch1_.sweep_shift;
+
+    int new_frequency;
+    if (ch1_.sweep_decreasing) {
+        new_frequency = ch1_.sweep_shadow - change;
+    } else {
+        new_frequency = ch1_.sweep_shadow + change;
+    }
+
+    if (new_frequency > 2047) {
+        ch1_.enabled = false;
+    }
+    return new_frequency;
+}
+
+
+// Clocked at 128Hz by the frame sequencer.
+void Apu::clock_sweep() {
+    if (ch1_.sweep_counter > 0) {
+        ch1_.sweep_counter--;
+    }
+    if (ch1_.sweep_counter != 0) {
+        return;
+    }
+
+    // A period of 0 is treated as 8 for reload purposes, but doesn't actually
+    // move the frequency.
+    if (ch1_.sweep_period > 0) {
+        ch1_.sweep_counter = ch1_.sweep_period;
+    } else {
+        ch1_.sweep_counter = 8;
+    }
+
+    if (!ch1_.sweep_enabled || ch1_.sweep_period == 0) {
+        return;
+    }
+
+    int new_frequency = calculate_sweep_frequency();
+    if (new_frequency <= 2047 && ch1_.sweep_shift > 0) {
+        ch1_.sweep_shadow = new_frequency;
+        ch1_.frequency = new_frequency;
+        // Hardware runs the overflow check a second time after updating.
+        calculate_sweep_frequency();
+    }
+}
+
+
 uint8_t Apu::read_register(uint16_t address) const {
     if (address >= 0xFF30) {
         return wave_ram_[address - 0xFF30];
@@ -167,6 +220,13 @@ void Apu::write_register(uint16_t address, uint8_t value) {
     registers_[address - 0xFF10] = value;
 
     switch (address) {
+        // NR10, channel 1's frequency sweep.
+        case 0xFF10:
+            ch1_.sweep_period = (value >> 4) & 0x07;
+            ch1_.sweep_decreasing = (value & 0x08) != 0;
+            ch1_.sweep_shift = value & 0x07;
+            break;
+
         // NR11, duty pattern and length.
         case 0xFF11:
             ch1_.duty_pattern = (value >> 6) & 0x03;
@@ -362,8 +422,31 @@ void Apu::trigger_pulse(PulseChannel& channel, bool is_channel_1) {
     channel.envelope.volume = channel.envelope.initial_volume;
     channel.envelope.counter = channel.envelope.period;
 
-    // Sweep is channel 1 only, and gets set up in a later step. Delete once implemented!!
-    (void)is_channel_1;
+    if (!is_channel_1) {
+        return;
+    }
+
+    // The sweep works on its own copy of the frequency so that repeated sweep
+    // steps compound on the snapshot rather than whatever the game last wrote.
+    channel.sweep_shadow = channel.frequency;
+
+    if (channel.sweep_period > 0) {
+        channel.sweep_counter = channel.sweep_period;
+    } else {
+        channel.sweep_counter = 8;
+    }
+
+    if (channel.sweep_period > 0 || channel.sweep_shift > 0) {
+        channel.sweep_enabled = true;
+    } else {
+        channel.sweep_enabled = false;
+    }
+
+    if (channel.sweep_shift > 0) {
+        // Runs purely for the overflow check, which can disable the channel
+        // immediately on trigger.
+        calculate_sweep_frequency();
+    }
 }
 
 
