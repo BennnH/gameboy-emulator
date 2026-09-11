@@ -76,13 +76,44 @@ void Apu::step_frame_sequencer() {
 
         // The envelope is clocked once per full cycle, giving 64Hz.
         case 7:
-            // TODO: clock envelopes.
+            clock_envelopes();
             break;
 
         default:
             break;
     }
     sequencer_step_ = (sequencer_step_ + 1) & 0x07;
+}
+
+// Clocked at 64Hz by the frame sequencer. A period of 0 switches the envelope
+// off entirely, leaving the volume wherever it currently is.
+void Apu::clock_envelope(Envelope& envelope) {
+    if (envelope.period == 0) {
+        return;
+    }
+
+    if (envelope.counter > 0) {
+        envelope.counter--;
+    }
+    if (envelope.counter != 0) {
+        return;
+    }
+
+    // Reload and move the volume one step, stopping at either end of the range.
+    envelope.counter = envelope.period;
+    if (envelope.increasing && envelope.volume < 15) {
+        envelope.volume++;
+    } else if (!envelope.increasing && envelope.volume > 0) {
+        envelope.volume--;
+    }
+}
+
+
+// Channel 3 has no envelope, its volume is a fixed shift instead.
+void Apu::clock_envelopes() {
+    clock_envelope(ch1_.envelope);
+    clock_envelope(ch2_.envelope);
+    clock_envelope(ch4_.envelope);
 }
 
 
@@ -121,9 +152,9 @@ void Apu::write_register(uint16_t address, uint8_t value) {
 
         // NR12, envelope. The top 5 bits being clear switches the DAC off.
         case 0xFF12:
-            ch1_.envelope_initial_volume = (value >> 4) & 0x0F;
-            ch1_.envelope_increasing = (value & 0x08) != 0;
-            ch1_.envelope_period = value & 0x07;
+            ch1_.envelope.initial_volume = (value >> 4) & 0x0F;
+            ch1_.envelope.increasing = (value & 0x08) != 0;
+            ch1_.envelope.period = value & 0x07;
             ch1_.dac_enabled = (value & 0xF8) != 0;
             if (!ch1_.dac_enabled) {
                 ch1_.enabled = false;
@@ -151,9 +182,9 @@ void Apu::write_register(uint16_t address, uint8_t value) {
             break;
 
         case 0xFF17:
-            ch2_.envelope_initial_volume = (value >> 4) & 0x0F;
-            ch2_.envelope_increasing = (value & 0x08) != 0;
-            ch2_.envelope_period = value & 0x07;
+            ch2_.envelope.initial_volume = (value >> 4) & 0x0F;
+            ch2_.envelope.increasing = (value & 0x08) != 0;
+            ch2_.envelope.period = value & 0x07;
             ch2_.dac_enabled = (value & 0xF8) != 0;
             if (!ch2_.dac_enabled) {
                 ch2_.enabled = false;
@@ -213,9 +244,9 @@ void Apu::write_register(uint16_t address, uint8_t value) {
             break;
 
         case 0xFF21:
-            ch4_.envelope_initial_volume = (value >> 4) & 0x0F;
-            ch4_.envelope_increasing = (value & 0x08) != 0;
-            ch4_.envelope_period = value & 0x07;
+            ch4_.envelope.initial_volume = (value >> 4) & 0x0F;
+            ch4_.envelope.increasing = (value & 0x08) != 0;
+            ch4_.envelope.period = value & 0x07;
             ch4_.dac_enabled = (value & 0xF8) != 0;
             if (!ch4_.dac_enabled) {
                 ch4_.enabled = false;
@@ -257,7 +288,7 @@ int Apu::pulse_output(const PulseChannel& channel) const {
     if (!channel.enabled || !channel.dac_enabled) {
         return 0;
     }
-    return DUTY_TABLE[channel.duty_pattern][channel.duty_position] ? channel.volume : 0;
+    return DUTY_TABLE[channel.duty_pattern][channel.duty_position] ? channel.envelope.volume : 0;
 }
 
 // Mixes the channel outputs into one stereo sample, applying the routing matrix
@@ -305,8 +336,8 @@ void Apu::trigger_pulse(PulseChannel& channel, bool is_channel_1) {
         channel.length_counter = 64;
     }
     channel.frequency_timer = (2048 - channel.frequency) * 4;
-    channel.volume = channel.envelope_initial_volume;
-    channel.envelope_counter = channel.envelope_period;
+    channel.envelope.volume = channel.envelope.initial_volume;
+    channel.envelope.counter = channel.envelope.period;
 
     // Sweep is channel 1 only, and gets set up in a later step. Delete once implemented!!
     (void)is_channel_1;
@@ -371,7 +402,7 @@ int Apu::noise_output() const {
         return 0;
     }
     // The output is bit 0 inverted.
-    return (~ch4_.lfsr & 1) ? ch4_.volume : 0;
+    return (~ch4_.lfsr & 1) ? ch4_.envelope.volume : 0;
 }
 
 
@@ -381,8 +412,8 @@ void Apu::trigger_noise() {
         ch4_.length_counter = 64;
     }
     ch4_.frequency_timer = NOISE_DIVISORS[ch4_.divisor_code] << ch4_.clock_shift;
-    ch4_.volume = ch4_.envelope_initial_volume;
-    ch4_.envelope_counter = ch4_.envelope_period;
+    ch4_.envelope.volume = ch4_.envelope.initial_volume;
+    ch4_.envelope.counter = ch4_.envelope.period;
     // All bits set, so the sequence starts from the same place every time.
     ch4_.lfsr = 0x7FFF;
 }

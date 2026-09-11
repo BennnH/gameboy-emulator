@@ -5,6 +5,21 @@
 #include <vector>
 
 
+// The volume envelope, which walks a channel's volume up or down over time so
+// notes fade or grow rather than stopping dead. Channels 1, 2 and 4 have one.
+struct Envelope {
+    // The live volume, 0-15, which the envelope changes as it runs.
+    int volume{0};
+    // What NR12/NR22/NR42 said, and what volume resets to on every trigger.
+    int initial_volume{0};
+    // Whether the volume walks up or down.
+    bool increasing{false};
+    // How many envelope clocks between each step. 0 switches it off entirely.
+    int period{0};
+    // Counts down to the next step.
+    int counter{0};
+};
+
 
 // A square wave channel. Channels 1 and 2 are identical except that only
 // channel 1 has a frequency sweep unit, so channel 2 leaves those fields unused.
@@ -27,11 +42,7 @@ struct PulseChannel {
     int frequency_timer{0};
 
     // Volume envelope, clocked at 64Hz by the frame sequencer.
-    int volume{0};
-    int envelope_initial_volume{0};
-    bool envelope_increasing{false};
-    int envelope_period{0};
-    int envelope_counter{0};
+    Envelope envelope;
 
     // Length counter, clocked at 256Hz. Only switches the channel off when the
     // length enable bit in NR14 is set, which games often leave clear.
@@ -82,11 +93,8 @@ struct NoiseChannel {
     int clock_shift{0};
     int divisor_code{0};
 
-    int volume{0};
-    int envelope_initial_volume{0};
-    bool envelope_increasing{false};
-    int envelope_period{0};
-    int envelope_counter{0};
+    // Volume envelope, clocked at 64Hz by the frame sequencer.
+    Envelope envelope;
 
     int length_counter{0};
     bool length_enabled{false};
@@ -137,4 +145,7 @@ class Apu {
         void tick_noise(int cycles);
         int noise_output() const;
         void trigger_noise();
+
+        void clock_envelope(Envelope& envelope);
+        void clock_envelopes();
 };
