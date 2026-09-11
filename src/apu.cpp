@@ -26,15 +26,34 @@ constexpr int NOISE_DIVISORS[8] = {8, 16, 32, 48, 64, 80, 96, 112};
 
 void Apu::reset() {
     registers_.fill(0);
+    wave_ram_.fill(0);
     sequencer_counter_ = 0;
     sequencer_step_ = 0;
     sample_counter_ = 0.0;
     sample_buffer_.clear();
     enabled_ = false;
+
+    ch1_ = PulseChannel{};
+    ch2_ = PulseChannel{};
+    ch3_ = WaveChannel{};
+    ch4_ = NoiseChannel{};
 }
 
 
 void Apu::tick(int cycles) {
+    // With the APU switched off we still have to feed the audio device or its
+    // queue starves, so just feed it silence.
+    if (!enabled_) {
+        sample_counter_ += cycles;
+        while (sample_counter_ >= CYCLES_PER_SAMPLE) {
+            sample_counter_ -= CYCLES_PER_SAMPLE;
+            sample_buffer_.push_back(0.0f);
+            sample_buffer_.push_back(0.0f);
+        }
+        return;
+    }
+
+
     // The frame sequencer clocks the length counters, sweep and envelope. It
     // keeps running regardless of which channels are currently active.
     sequencer_counter_ += cycles;
@@ -198,6 +217,17 @@ uint8_t Apu::read_register(uint16_t address) const {
         return wave_ram_[address - 0xFF30];
     }
 
+    // NR52. Bit 7 is the master enable and bits 0-3 report which channels are
+    // currently active, both driven by the hardware rather than stored.
+    if (address == 0xFF26) {
+        uint8_t status = enabled_ ? 0x80 : 0x00;
+        if (ch1_.enabled) status |= 0x01;
+        if (ch2_.enabled) status |= 0x02;
+        if (ch3_.enabled) status |= 0x04;
+        if (ch4_.enabled) status |= 0x08;
+        return status | 0x70;
+    }
+
     return registers_[address - 0xFF10];
 }
 
@@ -212,8 +242,26 @@ void Apu::write_register(uint16_t address, uint8_t value) {
     // NR52. Bit 7 is the master enable, but bits 0-3 are channel status driven
     // by the hardware and are read only, so a CPU write only touches bit 7.
     if (address == 0xFF26) {
+        bool was_enabled = enabled_;
         enabled_ = (value & 0x80) != 0;
-        registers_[0xFF26 - 0xFF10] = (registers_[0xFF26 - 0xFF10] & 0x0F) | (value & 0x80);
+        registers_[0xFF26 - 0xFF10] = value & 0x80;
+
+        // Switching the APU off clears every register and all channel state,
+        // which is how games silence everything in a single write.
+        if (was_enabled && !enabled_) {
+            for (uint16_t reg = 0xFF10; reg < 0xFF26; reg++) {
+                registers_[reg - 0xFF10] = 0;
+            }
+            ch1_ = PulseChannel{};
+            ch2_ = PulseChannel{};
+            ch3_ = WaveChannel{};
+            ch4_ = NoiseChannel{};
+        }
+        return;
+    }
+
+    // With the APU off, writes to the channel registers are ignored.
+    if (!enabled_) {
         return;
     }
 
