@@ -1,5 +1,4 @@
 #include "apu.h"
-#include <cstdio>
 
 // The DMG runs at 4,194,304 T-cycles per second. The frame sequencer runs at
 // 512Hz, so it steps once every 8192 cycles.
@@ -11,6 +10,14 @@ constexpr int SAMPLE_RATE = 44100;
 // would drift ahead of the emulator.
 constexpr double CYCLES_PER_SAMPLE = 4194304.0 / SAMPLE_RATE;
 
+// The four duty patterns a pulse channel can play. Each is 8 steps of on or
+// off, and which one is selected changes the tone without changing the pitch.
+constexpr uint8_t DUTY_TABLE[4][8] = {
+    {0, 0, 0, 0, 0, 0, 0, 1},  // 12.5%
+    {1, 0, 0, 0, 0, 0, 0, 1},  // 25%
+    {1, 0, 0, 0, 0, 1, 1, 1},  // 50%
+    {0, 1, 1, 1, 1, 1, 1, 0},  // 75%
+};
 
 void Apu::reset() {
     registers_.fill(0);
@@ -31,19 +38,21 @@ void Apu::tick(int cycles) {
         step_frame_sequencer();
     }
 
-    // TODO: tick each channel's frequency timer, then take an output sample
-    // every CYCLES_PER_SAMPLE cycles. Nothing to sample until channel 1 exists.
+    // Each channel's own timer runs at T-cycle speed and produces the waveform.
+    tick_pulse(ch1_, cycles);
+
+    // Downsample from the ~4MHz channel output to the 44.1kHz the sound card wants.
+    sample_counter_ += cycles;
+    while (sample_counter_ >= CYCLES_PER_SAMPLE) {
+        sample_counter_ -= CYCLES_PER_SAMPLE;
+        generate_sample();
+    }
 }
 
 
 // Steps through the 8 stage cycle that drives everything which changes a
 // channel's output over time, as opposed to producing the waveform itself.
 void Apu::step_frame_sequencer() {
-    static int steps = 0;
-    if (++steps % 512 == 0) {
-        std::printf("sequencer: %d seconds\n", steps / 512);
-        std::fflush(stdout);
-    }
     switch (sequencer_step_) {
         // Length counters are clocked on every even step, giving 256Hz.
         case 0:
@@ -84,4 +93,100 @@ void Apu::write_register(uint16_t address, uint8_t value) {
     }
 
     registers_[address - 0xFF10] = value;
+
+    switch (address) {
+        // NR11, duty pattern and length.
+        case 0xFF11:
+            ch1_.duty_pattern = (value >> 6) & 0x03;
+            ch1_.length_counter = 64 - (value & 0x3F);
+            break;
+
+        // NR12, envelope. The top 5 bits being clear switches the DAC off.
+        case 0xFF12:
+            ch1_.envelope_initial_volume = (value >> 4) & 0x0F;
+            ch1_.envelope_increasing = (value & 0x08) != 0;
+            ch1_.envelope_period = value & 0x07;
+            ch1_.dac_enabled = (value & 0xF8) != 0;
+            if (!ch1_.dac_enabled) {
+                ch1_.enabled = false;
+            }
+            break;
+
+        // NR13, low 8 bits of the frequency.
+        case 0xFF13:
+            ch1_.frequency = (ch1_.frequency & 0x0700) | value;
+            break;
+
+        // NR14, high 3 bits of the frequency plus trigger and length enable.
+        case 0xFF14:
+            ch1_.frequency = (ch1_.frequency & 0x00FF) | ((value & 0x07) << 8);
+            ch1_.length_enabled = (value & 0x40) != 0;
+            if (value & 0x80) {
+                trigger_pulse(ch1_, true);
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+
+void Apu::tick_pulse(PulseChannel& channel, int cycles) {
+    channel.frequency_timer -= cycles;
+    while (channel.frequency_timer <= 0) {
+        // A higher frequency value means a smaller reload, so the duty position
+        // advances faster and the pitch goes up.
+        channel.frequency_timer += (2048 - channel.frequency) * 4;
+        channel.duty_position = (channel.duty_position + 1) & 0x07;
+    }
+}
+
+
+int Apu::pulse_output(const PulseChannel& channel) const {
+    if (!channel.enabled || !channel.dac_enabled) {
+        return 0;
+    }
+    return DUTY_TABLE[channel.duty_pattern][channel.duty_position] ? channel.volume : 0;
+}
+
+// Mixes the channel outputs into one stereo sample, applying the routing matrix
+// in NR51 and the master volume in NR50.
+void Apu::generate_sample() {
+    int ch1 = pulse_output(ch1_);
+
+    uint8_t nr51 = registers_[0xFF25 - 0xFF10];
+    uint8_t nr50 = registers_[0xFF24 - 0xFF10];
+
+    // The low nibble of NR51 routes channels to the right, the high nibble
+    // to the left.
+    int left = (nr51 & 0x10) ? ch1 : 0;
+    int right = (nr51 & 0x01) ? ch1 : 0;
+
+    int left_volume = (nr50 >> 4) & 0x07;
+    int right_volume = nr50 & 0x07;
+
+    // Four channels of 0-15 gives a maximum of 60, and the master volume scales
+    // that by a factor of 1/8 to 8/8.
+    float left_sample = (left / 60.0f) * ((left_volume + 1) / 8.0f);
+    float right_sample = (right / 60.0f) * ((right_volume + 1) / 8.0f);
+
+    sample_buffer_.push_back(left_sample);
+    sample_buffer_.push_back(right_sample);
+}
+
+
+void Apu::trigger_pulse(PulseChannel& channel, bool is_channel_1) {
+    // Triggering a channel whose DAC is off leaves it silent.
+    channel.enabled = channel.dac_enabled;
+
+    if (channel.length_counter == 0) {
+        channel.length_counter = 64;
+    }
+    channel.frequency_timer = (2048 - channel.frequency) * 4;
+    channel.volume = channel.envelope_initial_volume;
+    channel.envelope_counter = channel.envelope_period;
+
+    // Sweep is channel 1 only, and gets set up in a later step. Delete once implemented!!
+    (void)is_channel_1;
 }
